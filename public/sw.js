@@ -1,4 +1,4 @@
-const CACHE_NAME = 'harvest-erp-v2';
+const CACHE_NAME = 'harvest-erp-v3';
 const ASSETS = [
   '/',
   '/favicon.png',
