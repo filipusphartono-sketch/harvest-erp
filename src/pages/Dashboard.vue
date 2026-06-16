@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { auth, db } from '../firebase'
-import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore'
+import { auth, db, app } from '../firebase'
+import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
+import { initializeApp, getApps } from 'firebase/app'
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 
 const router = useRouter()
 const currentTab = ref('dashboard')
@@ -58,6 +60,7 @@ const getTabTitle = (tab: string) => {
     case 'pengaturan_suppliyer_bahan': return 'Pengaturan - Suppliyer-Bahan'
     case 'pengaturan_bahan_baku': return 'Pengaturan - Bahan Baku'
     case 'pengaturan_barang_jadi': return 'Pengaturan - Barang Jadi'
+    case 'pengaturan_daftar_kota': return 'Pengaturan - Daftar Kota'
     default: return 'Harvest ERP'
   }
 }
@@ -86,6 +89,177 @@ const editForm = ref({ fullName: '', role: 'Karyawan', status: 'Aktif', phoneNum
 const showDeleteModal = ref(false)
 const deletingUser = ref<UserProfile | null>(null)
 const mutating = ref(false)
+
+// Add user states
+const showAddModal = ref(false)
+const addError = ref('')
+const addForm = ref({
+  fullName: '',
+  email: '',
+  phoneNumber: '',
+  address: '',
+  password: '',
+  role: 'Karyawan',
+  status: 'Aktif'
+})
+const resettingAddForm = () => {
+  addForm.value = {
+    fullName: '',
+    email: '',
+    phoneNumber: '',
+    address: '',
+    password: '',
+    role: 'Karyawan',
+    status: 'Aktif'
+  }
+  addError.value = ''
+}
+
+interface CustomerItem {
+  itemName: string
+  price: number
+}
+
+interface Customer {
+  id: string
+  name: string
+  address: string
+  city: string
+  googleMap: string
+  items: CustomerItem[]
+  createdAt: string
+}
+
+interface Supplier {
+  id: string
+  name: string
+  address: string
+  googleMap: string
+  createdAt: string
+}
+
+// Customer states
+const customers = ref<Customer[]>([])
+const loadingCustomers = ref(false)
+const showAddCustomerModal = ref(false)
+const showEditCustomerModal = ref(false)
+const showDeleteCustomerModal = ref(false)
+const editingCustomer = ref<Customer | null>(null)
+const deletingCustomer = ref<Customer | null>(null)
+const customerError = ref('')
+const customerForm = ref<{
+  name: string
+  address: string
+  city: string
+  googleMap: string
+  items: CustomerItem[]
+}>({
+  name: '',
+  address: '',
+  city: '',
+  googleMap: '',
+  items: [{ itemName: '', price: 0 }]
+})
+
+const addFormItem = () => {
+  customerForm.value.items.push({ itemName: '', price: 0 })
+}
+
+const removeFormItem = (index: number) => {
+  if (customerForm.value.items.length > 1) {
+    customerForm.value.items.splice(index, 1)
+  }
+}
+
+const resetCustomerForm = () => {
+  customerForm.value = {
+    name: '',
+    address: '',
+    city: '',
+    googleMap: '',
+    items: [{ itemName: '', price: 0 }]
+  }
+  customerError.value = ''
+}
+
+// Supplier states
+const suppliers = ref<Supplier[]>([])
+const loadingSuppliers = ref(false)
+const showAddSupplierModal = ref(false)
+const showEditSupplierModal = ref(false)
+const showDeleteSupplierModal = ref(false)
+const editingSupplier = ref<Supplier | null>(null)
+const deletingSupplier = ref<Supplier | null>(null)
+const supplierError = ref('')
+const supplierForm = ref({
+  name: '',
+  address: '',
+  googleMap: ''
+})
+const resetSupplierForm = () => {
+  supplierForm.value = {
+    name: '',
+    address: '',
+    googleMap: ''
+  }
+  supplierError.value = ''
+}
+
+interface City {
+  id: string
+  cityName: string
+  createdAt: string
+}
+
+// City states
+const cities = ref<City[]>([])
+const loadingCities = ref(false)
+const showAddCityModal = ref(false)
+const showEditCityModal = ref(false)
+const showDeleteCityModal = ref(false)
+const editingCity = ref<City | null>(null)
+const deletingCity = ref<City | null>(null)
+const cityError = ref('')
+const cityForm = ref({
+  cityName: ''
+})
+const resetCityForm = () => {
+  cityForm.value = {
+    cityName: ''
+  }
+  cityError.value = ''
+}
+
+interface RawMaterial {
+  id: string
+  name: string
+  packaging: string
+  weight: number
+  createdAt: string
+}
+
+// Raw Material states
+const rawMaterials = ref<RawMaterial[]>([])
+const loadingRawMaterials = ref(false)
+const showAddMaterialModal = ref(false)
+const showEditMaterialModal = ref(false)
+const showDeleteMaterialModal = ref(false)
+const editingMaterial = ref<RawMaterial | null>(null)
+const deletingMaterial = ref<RawMaterial | null>(null)
+const materialError = ref('')
+const materialForm = ref({
+  name: '',
+  packaging: '',
+  weight: 0
+})
+const resetMaterialForm = () => {
+  materialForm.value = {
+    name: '',
+    packaging: '',
+    weight: 0
+  }
+  materialError.value = ''
+}
 
 const stats = ref([
   { name: 'Total Pendapatan', value: 'Rp 0', change: '0%', changeType: 'positive' },
@@ -266,6 +440,540 @@ const executeDelete = async () => {
   }
 }
 
+const saveAdd = async () => {
+  mutating.value = true
+  addError.value = ''
+  try {
+    const apps = getApps()
+    const secondaryApp = apps.find(a => a.name === 'Secondary') || initializeApp(app.options, 'Secondary')
+    const secondaryAuth = getAuth(secondaryApp)
+    
+    const userCredential = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      addForm.value.email,
+      addForm.value.password
+    )
+    
+    if (userCredential.user) {
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        fullName: addForm.value.fullName,
+        email: addForm.value.email,
+        phoneNumber: addForm.value.phoneNumber,
+        address: addForm.value.address,
+        role: addForm.value.role,
+        status: addForm.value.status,
+        createdAt: serverTimestamp()
+      })
+    }
+    
+    await secondaryAuth.signOut()
+    
+    showAddModal.value = false
+    resettingAddForm()
+  } catch (error: any) {
+    console.error('Error adding user:', error)
+    if (error.code === 'auth/email-already-in-use') {
+      addError.value = 'Email sudah terdaftar.'
+    } else if (error.code === 'auth/weak-password') {
+      addError.value = 'Kata sandi minimal 6 karakter.'
+    } else if (error.code === 'auth/invalid-email') {
+      addError.value = 'Format email tidak valid.'
+    } else {
+      addError.value = error.message || 'Gagal menambahkan pengguna.'
+    }
+  } finally {
+    mutating.value = false
+  }
+}
+
+let unsubscribeCustomers: (() => void) | null = null
+let unsubscribeSuppliers: (() => void) | null = null
+
+const fetchCustomers = () => {
+  loadingCustomers.value = true
+  if (unsubscribeCustomers) unsubscribeCustomers()
+  
+  unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (querySnapshot) => {
+    const fetched: Customer[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      
+      let itemsList: CustomerItem[] = []
+      if (Array.isArray(data.items)) {
+        itemsList = data.items.map((i: any) => ({
+          itemName: i.itemName || '',
+          price: Number(i.price) || 0
+        }))
+      } else if (data.item) {
+        itemsList = [{
+          itemName: data.item,
+          price: Number(data.price) || 0
+        }]
+      }
+      
+      fetched.push({
+        id: doc.id,
+        name: data.name || '',
+        address: data.address || '',
+        city: data.city || '',
+        googleMap: data.googleMap || '',
+        items: itemsList,
+        createdAt: dateString
+      })
+    })
+    customers.value = fetched
+    loadingCustomers.value = false
+  }, (error) => {
+    console.error('Error fetching customers:', error)
+    loadingCustomers.value = false
+  })
+}
+
+const fetchSuppliers = () => {
+  loadingSuppliers.value = true
+  if (unsubscribeSuppliers) unsubscribeSuppliers()
+  
+  unsubscribeSuppliers = onSnapshot(collection(db, 'suppliyers'), (querySnapshot) => {
+    const fetched: Supplier[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      fetched.push({
+        id: doc.id,
+        name: data.name || '',
+        address: data.address || '',
+        googleMap: data.googleMap || '',
+        createdAt: dateString
+      })
+    })
+    suppliers.value = fetched
+    loadingSuppliers.value = false
+  }, (error) => {
+    console.error('Error fetching suppliers:', error)
+    loadingSuppliers.value = false
+  })
+}
+
+// Customer handlers
+const saveAddCustomer = async () => {
+  mutating.value = true
+  customerError.value = ''
+  try {
+    const docRef = doc(collection(db, 'customers'))
+    await setDoc(docRef, {
+      name: customerForm.value.name,
+      address: customerForm.value.address,
+      city: customerForm.value.city,
+      googleMap: customerForm.value.googleMap,
+      items: customerForm.value.items.map(i => ({
+        itemName: i.itemName,
+        price: Number(i.price) || 0
+      })),
+      createdAt: serverTimestamp()
+    })
+    showAddCustomerModal.value = false
+    resetCustomerForm()
+  } catch (error: any) {
+    console.error('Error adding customer:', error)
+    customerError.value = error.message || 'Gagal menambahkan pelanggan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditCustomer = (cust: Customer) => {
+  editingCustomer.value = cust
+  const mappedItems = cust.items && cust.items.length > 0
+    ? cust.items.map(i => ({ itemName: i.itemName, price: i.price }))
+    : [{ itemName: '', price: 0 }]
+  customerForm.value = {
+    name: cust.name,
+    address: cust.address,
+    city: cust.city,
+    googleMap: cust.googleMap,
+    items: mappedItems
+  }
+  showEditCustomerModal.value = true
+}
+
+const saveEditCustomer = async () => {
+  if (!editingCustomer.value) return
+  mutating.value = true
+  customerError.value = ''
+  try {
+    const docRef = doc(db, 'customers', editingCustomer.value.id)
+    await setDoc(docRef, {
+      name: customerForm.value.name,
+      address: customerForm.value.address,
+      city: customerForm.value.city,
+      googleMap: customerForm.value.googleMap,
+      items: customerForm.value.items.map(i => ({
+        itemName: i.itemName,
+        price: Number(i.price) || 0
+      }))
+    }, { merge: true })
+    showEditCustomerModal.value = false
+    editingCustomer.value = null
+    resetCustomerForm()
+  } catch (error: any) {
+    console.error('Error editing customer:', error)
+    customerError.value = error.message || 'Gagal mengubah data pelanggan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteCustomer = (cust: Customer) => {
+  deletingCustomer.value = cust
+  showDeleteCustomerModal.value = true
+}
+
+const executeDeleteCustomer = async () => {
+  if (!deletingCustomer.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'customers', deletingCustomer.value.id))
+    showDeleteCustomerModal.value = false
+    deletingCustomer.value = null
+  } catch (error) {
+    console.error('Error deleting customer:', error)
+    alert('Gagal menghapus pelanggan.')
+  } finally {
+    mutating.value = false
+  }
+}
+
+// Supplier handlers
+const saveAddSupplier = async () => {
+  mutating.value = true
+  supplierError.value = ''
+  try {
+    const docRef = doc(collection(db, 'suppliyers'))
+    await setDoc(docRef, {
+      name: supplierForm.value.name,
+      address: supplierForm.value.address,
+      googleMap: supplierForm.value.googleMap,
+      createdAt: serverTimestamp()
+    })
+    showAddSupplierModal.value = false
+    resetSupplierForm()
+  } catch (error: any) {
+    console.error('Error adding supplier:', error)
+    supplierError.value = error.message || 'Gagal menambahkan supplier.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditSupplier = (sup: Supplier) => {
+  editingSupplier.value = sup
+  supplierForm.value = {
+    name: sup.name,
+    address: sup.address,
+    googleMap: sup.googleMap
+  }
+  showEditSupplierModal.value = true
+}
+
+const saveEditSupplier = async () => {
+  if (!editingSupplier.value) return
+  mutating.value = true
+  supplierError.value = ''
+  try {
+    const docRef = doc(db, 'suppliyers', editingSupplier.value.id)
+    await setDoc(docRef, {
+      name: supplierForm.value.name,
+      address: supplierForm.value.address,
+      googleMap: supplierForm.value.googleMap
+    }, { merge: true })
+    showEditSupplierModal.value = false
+    editingSupplier.value = null
+    resetSupplierForm()
+  } catch (error: any) {
+    console.error('Error editing supplier:', error)
+    supplierError.value = error.message || 'Gagal mengubah data supplier.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteSupplier = (sup: Supplier) => {
+  deletingSupplier.value = sup
+  showDeleteSupplierModal.value = true
+}
+
+const executeDeleteSupplier = async () => {
+  if (!deletingSupplier.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'suppliyers', deletingSupplier.value.id))
+    showDeleteSupplierModal.value = false
+    deletingSupplier.value = null
+  } catch (error) {
+    console.error('Error deleting supplier:', error)
+    alert('Gagal menghapus supplier.')
+  } finally {
+    mutating.value = false
+  }
+}
+
+let unsubscribeCities: (() => void) | null = null
+
+const fetchCities = () => {
+  loadingCities.value = true
+  if (unsubscribeCities) unsubscribeCities()
+  
+  unsubscribeCities = onSnapshot(collection(db, 'cities'), (querySnapshot) => {
+    const fetched: City[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      fetched.push({
+        id: doc.id,
+        cityName: data.cityName || '',
+        createdAt: dateString
+      })
+    })
+    
+    // Auto-seed default cities if collection is empty
+    if (fetched.length === 0 && !localStorage.getItem('harvest_erp_cities_seeded')) {
+      const defaultCities = ['Salatiga', 'Semarang', 'Jakarta', 'Bandung', 'Surabaya']
+      Promise.all(defaultCities.map(city => {
+        const docRef = doc(collection(db, 'cities'))
+        return setDoc(docRef, {
+          cityName: city,
+          createdAt: serverTimestamp()
+        })
+      })).then(() => {
+        localStorage.setItem('harvest_erp_cities_seeded', 'true')
+      }).catch(err => {
+        console.error('Error seeding cities:', err)
+      })
+    }
+    
+    cities.value = fetched
+    loadingCities.value = false
+  }, (error) => {
+    console.error('Error fetching cities:', error)
+    loadingCities.value = false
+  })
+}
+
+// City CRUD handlers
+const saveAddCity = async () => {
+  mutating.value = true
+  cityError.value = ''
+  try {
+    const docRef = doc(collection(db, 'cities'))
+    await setDoc(docRef, {
+      cityName: cityForm.value.cityName,
+      createdAt: serverTimestamp()
+    })
+    showAddCityModal.value = false
+    resetCityForm()
+  } catch (error: any) {
+    console.error('Error adding city:', error)
+    cityError.value = error.message || 'Gagal menambahkan kota.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditCity = (city: City) => {
+  editingCity.value = city
+  cityForm.value = {
+    cityName: city.cityName
+  }
+  showEditCityModal.value = true
+}
+
+const saveEditCity = async () => {
+  if (!editingCity.value) return
+  mutating.value = true
+  cityError.value = ''
+  try {
+    const docRef = doc(db, 'cities', editingCity.value.id)
+    await setDoc(docRef, {
+      cityName: cityForm.value.cityName
+    }, { merge: true })
+    showEditCityModal.value = false
+    editingCity.value = null
+    resetCityForm()
+  } catch (error: any) {
+    console.error('Error editing city:', error)
+    cityError.value = error.message || 'Gagal mengubah data kota.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteCity = (city: City) => {
+  deletingCity.value = city
+  showDeleteCityModal.value = true
+}
+
+const executeDeleteCity = async () => {
+  if (!deletingCity.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'cities', deletingCity.value.id))
+    showDeleteCityModal.value = false
+    deletingCity.value = null
+  } catch (error) {
+    console.error('Error deleting city:', error)
+    alert('Gagal menghapus kota.')
+  } finally {
+    mutating.value = false
+  }
+}
+
+let unsubscribeRawMaterials: (() => void) | null = null
+
+const fetchRawMaterials = () => {
+  loadingRawMaterials.value = true
+  if (unsubscribeRawMaterials) unsubscribeRawMaterials()
+  
+  unsubscribeRawMaterials = onSnapshot(collection(db, 'bahan_baku'), (querySnapshot) => {
+    const fetched: RawMaterial[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      fetched.push({
+        id: doc.id,
+        name: data.name || '',
+        packaging: data.packaging || '',
+        weight: Number(data.weight) || 0,
+        createdAt: dateString
+      })
+    })
+    rawMaterials.value = fetched
+    loadingRawMaterials.value = false
+  }, (error) => {
+    console.error('Error fetching raw materials:', error)
+    loadingRawMaterials.value = false
+  })
+}
+
+// Raw Material CRUD handlers
+const saveAddMaterial = async () => {
+  mutating.value = true
+  materialError.value = ''
+  try {
+    const docRef = doc(collection(db, 'bahan_baku'))
+    await setDoc(docRef, {
+      name: materialForm.value.name,
+      packaging: materialForm.value.packaging,
+      weight: Number(materialForm.value.weight) || 0,
+      createdAt: serverTimestamp()
+    })
+    showAddMaterialModal.value = false
+    resetMaterialForm()
+  } catch (error: any) {
+    console.error('Error adding raw material:', error)
+    materialError.value = error.message || 'Gagal menambahkan bahan baku.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditMaterial = (material: RawMaterial) => {
+  editingMaterial.value = material
+  materialForm.value = {
+    name: material.name,
+    packaging: material.packaging,
+    weight: material.weight
+  }
+  showEditMaterialModal.value = true
+}
+
+const saveEditMaterial = async () => {
+  if (!editingMaterial.value) return
+  mutating.value = true
+  materialError.value = ''
+  try {
+    const docRef = doc(db, 'bahan_baku', editingMaterial.value.id)
+    await setDoc(docRef, {
+      name: materialForm.value.name,
+      packaging: materialForm.value.packaging,
+      weight: Number(materialForm.value.weight) || 0
+    }, { merge: true })
+    showEditMaterialModal.value = false
+    editingMaterial.value = null
+    resetMaterialForm()
+  } catch (error: any) {
+    console.error('Error editing raw material:', error)
+    materialError.value = error.message || 'Gagal mengubah bahan baku.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteMaterial = (material: RawMaterial) => {
+  deletingMaterial.value = material
+  showDeleteMaterialModal.value = true
+}
+
+const executeDeleteMaterial = async () => {
+  if (!deletingMaterial.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'bahan_baku', deletingMaterial.value.id))
+    showDeleteMaterialModal.value = false
+    deletingMaterial.value = null
+  } catch (error) {
+    console.error('Error deleting raw material:', error)
+    alert('Gagal menghapus bahan baku.')
+  } finally {
+    mutating.value = false
+  }
+}
+
 onMounted(() => {
   auth.onAuthStateChanged((user) => {
     if (user) {
@@ -274,6 +982,10 @@ onMounted(() => {
         email: user.email || 'admin@harvest-erp.com'
       }
       fetchUsers()
+      fetchCustomers()
+      fetchSuppliers()
+      fetchCities()
+      fetchRawMaterials()
     } else {
       router.push('/')
     }
@@ -289,6 +1001,18 @@ const handleLogout = () => {
 onUnmounted(() => {
   if (unsubscribeUsers) {
     unsubscribeUsers()
+  }
+  if (unsubscribeCustomers) {
+    unsubscribeCustomers()
+  }
+  if (unsubscribeSuppliers) {
+    unsubscribeSuppliers()
+  }
+  if (unsubscribeCities) {
+    unsubscribeCities()
+  }
+  if (unsubscribeRawMaterials) {
+    unsubscribeRawMaterials()
   }
 })
 </script>
@@ -497,12 +1221,13 @@ onUnmounted(() => {
               >
                 Bahan Baku
               </button>
+
               <button
-                @click="currentTab = 'pengaturan_barang_jadi'; openMenus.pengaturan = false"
+                @click="currentTab = 'pengaturan_daftar_kota'; openMenus.pengaturan = false"
                 class="w-full text-left px-4 py-2 text-[15px] hover:bg-slate-800 transition-colors"
-                :class="currentTab === 'pengaturan_barang_jadi' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
+                :class="currentTab === 'pengaturan_daftar_kota' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
               >
-                Barang Jadi
+                Daftar Kota
               </button>
             </div>
           </div>
@@ -712,12 +1437,13 @@ onUnmounted(() => {
               >
                 Bahan Baku
               </button>
+
               <button
-                @click="currentTab = 'pengaturan_barang_jadi'; showMobileSidebar = false"
+                @click="currentTab = 'pengaturan_daftar_kota'; showMobileSidebar = false"
                 class="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer text-left"
-                :class="currentTab === 'pengaturan_barang_jadi' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                :class="currentTab === 'pengaturan_daftar_kota' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
               >
-                Barang Jadi
+                Daftar Kota
               </button>
             </div>
           </div>
@@ -813,6 +1539,17 @@ onUnmounted(() => {
               <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Pengguna</h2>
               <p class="text-sm text-slate-400 mt-1">Kelola akun pengguna dan hak akses sistem ERP.</p>
             </div>
+            <div>
+              <button
+                @click="showAddModal = true; resettingAddForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah User
+              </button>
+            </div>
           </div>
 
           <!-- Loading State -->
@@ -903,6 +1640,362 @@ onUnmounted(() => {
                           @click="openDeleteModal(user)"
                           class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
                           title="Hapus Pengguna"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: CUSTOMER (Tabel Pelanggan) -->
+        <div v-else-if="currentTab === 'customer'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Pelanggan (Customer)</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola data pelanggan, alamat, dan harga produk.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddCustomerModal = true; resetCustomerForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Customer
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingCustomers" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat data pelanggan...</p>
+            </div>
+          </div>
+
+          <!-- Customer Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama</th>
+                    <th class="py-4 px-6">Alamat</th>
+                    <th class="py-4 px-6">Kota</th>
+                    <th class="py-4 px-6">Google Map</th>
+                    <th class="py-4 px-6">Barang</th>
+                    <th class="py-4 px-6">Harga</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="cust in customers" 
+                    :key="cust.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">{{ cust.name }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ cust.address }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ cust.city }}</td>
+                    <td class="py-4 px-6">
+                      <a 
+                        v-if="cust.googleMap"
+                        :href="cust.googleMap" 
+                        target="_blank" 
+                        class="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>Lihat Peta</span>
+                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                      <span v-else class="text-slate-500">-</span>
+                    </td>
+                    <td class="py-4 px-6 text-slate-400">
+                      <div class="space-y-1">
+                        <div v-for="(item, idx) in cust.items" :key="idx">
+                          {{ item.itemName || '-' }}
+                        </div>
+                        <div v-if="!cust.items || cust.items.length === 0">-</div>
+                      </div>
+                    </td>
+                    <td class="py-4 px-6 font-semibold text-emerald-400">
+                      <div class="space-y-1">
+                        <div v-for="(item, idx) in cust.items" :key="idx">
+                          Rp {{ item.price.toLocaleString('id-ID') }}
+                        </div>
+                        <div v-if="!cust.items || cust.items.length === 0">-</div>
+                      </div>
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditCustomer(cust)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Customer"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteCustomer(cust)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Customer"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: SUPPLIER (Tabel Supplier) -->
+        <div v-else-if="currentTab === 'suppliyer'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Supplier (Suppliyer)</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola data penyedia bahan baku dan lokasi supplier.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddSupplierModal = true; resetSupplierForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Supplier
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingSuppliers" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat data supplier...</p>
+            </div>
+          </div>
+
+          <!-- Supplier Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama Supplier</th>
+                    <th class="py-4 px-6">Alamat</th>
+                    <th class="py-4 px-6">Google Map</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="sup in suppliers" 
+                    :key="sup.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">{{ sup.name }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ sup.address }}</td>
+                    <td class="py-4 px-6">
+                      <a 
+                        v-if="sup.googleMap"
+                        :href="sup.googleMap" 
+                        target="_blank" 
+                        class="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>Lihat Peta</span>
+                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                      <span v-else class="text-slate-500">-</span>
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditSupplier(sup)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Supplier"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteSupplier(sup)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Supplier"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: DAFTAR KOTA (Pengaturan Kota) -->
+        <div v-else-if="currentTab === 'pengaturan_daftar_kota'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Kota</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola daftar kota wilayah operasional dan pengiriman.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddCityModal = true; resetCityForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Kota
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingCities" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat daftar kota...</p>
+            </div>
+          </div>
+
+          <!-- Cities Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama Kota</th>
+                    <th class="py-4 px-6">Tanggal Ditambahkan</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="city in cities" 
+                    :key="city.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">{{ city.cityName }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ city.createdAt }}</td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditCity(city)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Kota"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteCity(city)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Kota"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: BAHAN BAKU (Pengaturan Bahan Baku) -->
+        <div v-else-if="currentTab === 'pengaturan_bahan_baku'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Bahan Baku</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola data bahan baku produksi, kemasan, dan berat.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddMaterialModal = true; resetMaterialForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Bahan Baku
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingRawMaterials" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat bahan baku...</p>
+            </div>
+          </div>
+
+          <!-- Raw Materials Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama Bahan</th>
+                    <th class="py-4 px-6">Kemasan</th>
+                    <th class="py-4 px-6">Berat (Kg)</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="mat in rawMaterials" 
+                    :key="mat.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">{{ mat.name }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ mat.packaging }}</td>
+                    <td class="py-4 px-6 text-slate-400 font-semibold">{{ mat.weight }} Kg</td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditMaterial(mat)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Bahan Baku"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteMaterial(mat)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Bahan Baku"
                         >
                           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1032,6 +2125,512 @@ onUnmounted(() => {
             class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50"
           >
             {{ mutating ? 'Menghapus...' : 'Hapus Pengguna' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <!-- Overlay -->
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddModal = false"></div>
+      
+      <!-- Modal Box -->
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Pengguna Baru</h3>
+        <form @submit.prevent="saveAdd" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Lengkap</label>
+            <input 
+              v-model="addForm.fullName" 
+              type="text" 
+              required
+              placeholder="Nama Lengkap"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat Email</label>
+            <input 
+              v-model="addForm.email" 
+              type="email" 
+              required
+              placeholder="email@example.com"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kata Sandi</label>
+            <input 
+              v-model="addForm.password" 
+              type="password" 
+              required
+              placeholder="Minimal 6 karakter"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">No Telepon</label>
+            <input 
+              v-model="addForm.phoneNumber" 
+              type="tel" 
+              required
+              placeholder="Contoh: 08123456789"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat</label>
+            <input 
+              v-model="addForm.address" 
+              type="text" 
+              required
+              placeholder="Alamat Lengkap"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Peran (Role)</label>
+            <select 
+              v-model="addForm.role"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            >
+              <option value="Administrator">Administrator</option>
+              <option value="Karyawan">Karyawan</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Status</label>
+            <select 
+              v-model="addForm.status"
+              class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+            >
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+          <div v-if="addError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ addError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button 
+              type="button" 
+              @click="showAddModal = false"
+              class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer"
+            >
+              Batal
+            </button>
+            <button 
+              type="submit" 
+              :disabled="mutating"
+              class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {{ mutating ? 'Menyimpan...' : 'Simpan User' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add Customer Modal -->
+    <div v-if="showAddCustomerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddCustomerModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Customer Baru</h3>
+        <form @submit.prevent="saveAddCustomer" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama</label>
+            <input v-model="customerForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Pelanggan" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat</label>
+            <input v-model="customerForm.address" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Alamat Lengkap" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kota</label>
+            <select v-model="customerForm.city" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Kota</option>
+              <option v-for="city in cities" :key="city.id" :value="city.cityName">{{ city.cityName }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Google Map (Link URL)</label>
+            <input v-model="customerForm.googleMap" type="url" class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="https://maps.google.com/..." />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider">Daftar Barang & Harga</label>
+              <button 
+                type="button" 
+                @click="addFormItem"
+                class="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer"
+              >
+                + Tambah Barang
+              </button>
+            </div>
+            <div class="max-h-40 overflow-y-auto space-y-3 pr-1">
+              <div 
+                v-for="(item, index) in customerForm.items" 
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <input 
+                  v-model="item.itemName" 
+                  type="text" 
+                  required 
+                  placeholder="Nama Barang"
+                  class="flex-1 min-w-0 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <input 
+                  v-model.number="item.price" 
+                  type="number" 
+                  required 
+                  placeholder="Harga"
+                  class="w-28 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <button 
+                  type="button" 
+                  @click="removeFormItem(index)"
+                  :disabled="customerForm.items.length <= 1"
+                  class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg border border-red-500/20 transition-all cursor-pointer shrink-0"
+                  title="Hapus Barang"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-if="customerError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ customerError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddCustomerModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Customer' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Customer Modal -->
+    <div v-if="showEditCustomerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditCustomerModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Data Customer</h3>
+        <form @submit.prevent="saveEditCustomer" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama</label>
+            <input v-model="customerForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat</label>
+            <input v-model="customerForm.address" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kota</label>
+            <select v-model="customerForm.city" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Kota</option>
+              <option v-for="city in cities" :key="city.id" :value="city.cityName">{{ city.cityName }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Google Map (Link URL)</label>
+            <input v-model="customerForm.googleMap" type="url" class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider">Daftar Barang & Harga</label>
+              <button 
+                type="button" 
+                @click="addFormItem"
+                class="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer"
+              >
+                + Tambah Barang
+              </button>
+            </div>
+            <div class="max-h-40 overflow-y-auto space-y-3 pr-1">
+              <div 
+                v-for="(item, index) in customerForm.items" 
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <input 
+                  v-model="item.itemName" 
+                  type="text" 
+                  required 
+                  placeholder="Nama Barang"
+                  class="flex-1 min-w-0 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <input 
+                  v-model.number="item.price" 
+                  type="number" 
+                  required 
+                  placeholder="Harga"
+                  class="w-28 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <button 
+                  type="button" 
+                  @click="removeFormItem(index)"
+                  :disabled="customerForm.items.length <= 1"
+                  class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg border border-red-500/20 transition-all cursor-pointer shrink-0"
+                  title="Hapus Barang"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-if="customerError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ customerError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditCustomerModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Customer Modal -->
+    <div v-if="showDeleteCustomerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteCustomerModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Customer</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus pelanggan <span class="text-white font-semibold">{{ deletingCustomer?.name }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteCustomerModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteCustomer" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Customer' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Supplier Modal -->
+    <div v-if="showAddSupplierModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddSupplierModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Supplier Baru</h3>
+        <form @submit.prevent="saveAddSupplier" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Supplier</label>
+            <input v-model="supplierForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Supplier" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat</label>
+            <input v-model="supplierForm.address" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Alamat Lengkap" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Google Map (Link URL)</label>
+            <input v-model="supplierForm.googleMap" type="url" class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="https://maps.google.com/..." />
+          </div>
+          <div v-if="supplierError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ supplierError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddSupplierModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Supplier' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Supplier Modal -->
+    <div v-if="showEditSupplierModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditSupplierModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Data Supplier</h3>
+        <form @submit.prevent="saveEditSupplier" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Supplier</label>
+            <input v-model="supplierForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Alamat</label>
+            <input v-model="supplierForm.address" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Google Map (Link URL)</label>
+            <input v-model="supplierForm.googleMap" type="url" class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div v-if="supplierError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ supplierError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditSupplierModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Supplier Modal -->
+    <div v-if="showDeleteSupplierModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteSupplierModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Supplier</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus supplier <span class="text-white font-semibold">{{ deletingSupplier?.name }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteSupplierModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteSupplier" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Supplier' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add City Modal -->
+    <div v-if="showAddCityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddCityModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Kota Baru</h3>
+        <form @submit.prevent="saveAddCity" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Kota</label>
+            <input v-model="cityForm.cityName" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Kota (cth: Yogyakarta)" />
+          </div>
+          <div v-if="cityError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ cityError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddCityModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Kota' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit City Modal -->
+    <div v-if="showEditCityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditCityModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Nama Kota</h3>
+        <form @submit.prevent="saveEditCity" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Kota</label>
+            <input v-model="cityForm.cityName" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div v-if="cityError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ cityError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditCityModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete City Modal -->
+    <div v-if="showDeleteCityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteCityModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Kota</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus kota <span class="text-white font-semibold">{{ deletingCity?.cityName }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteCityModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteCity" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Kota' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Raw Material Modal -->
+    <div v-if="showAddMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Bahan Baku Baru</h3>
+        <form @submit.prevent="saveAddMaterial" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Bahan</label>
+            <input v-model="materialForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Bahan Baku" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kemasan</label>
+            <input v-model="materialForm.packaging" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Kemasan (cth: Sak, Karung, Jerigen)" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Berat (Kg)</label>
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Berat dalam Kg" />
+          </div>
+          <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ materialError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Bahan Baku' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Raw Material Modal -->
+    <div v-if="showEditMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Data Bahan Baku</h3>
+        <form @submit.prevent="saveEditMaterial" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Bahan</label>
+            <input v-model="materialForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kemasan</label>
+            <input v-model="materialForm.packaging" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Berat (Kg)</label>
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ materialError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Raw Material Modal -->
+    <div v-if="showDeleteMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Bahan Baku</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus bahan baku <span class="text-white font-semibold">{{ deletingMaterial?.name }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteMaterial" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Bahan Baku' }}
           </button>
         </div>
       </div>
