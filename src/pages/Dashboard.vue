@@ -61,6 +61,7 @@ const getTabTitle = (tab: string) => {
     case 'pengaturan_bahan_baku': return 'Pengaturan - Bahan Baku'
     case 'pengaturan_barang_jadi': return 'Pengaturan - Barang Jadi'
     case 'pengaturan_daftar_kota': return 'Pengaturan - Daftar Kota'
+    case 'pengaturan_daftar_kemas': return 'Pengaturan - Daftar Kemas'
     default: return 'Harvest ERP'
   }
 }
@@ -230,6 +231,32 @@ const resetCityForm = () => {
   cityError.value = ''
 }
 
+interface PackagingOption {
+  id: string
+  name: string
+  createdAt: string
+}
+
+// Packaging states
+const packagingOptions = ref<PackagingOption[]>([])
+const loadingPackagings = ref(false)
+const showAddPackagingModal = ref(false)
+const showEditPackagingModal = ref(false)
+const showDeletePackagingModal = ref(false)
+const editingPackaging = ref<PackagingOption | null>(null)
+const deletingPackaging = ref<PackagingOption | null>(null)
+const packagingError = ref('')
+const packagingForm = ref({
+  name: ''
+})
+const resetPackagingForm = () => {
+  packagingForm.value = {
+    name: ''
+  }
+  packagingError.value = ''
+}
+
+
 interface RawMaterial {
   id: string
   name: string
@@ -259,6 +286,41 @@ const resetMaterialForm = () => {
     weight: 0
   }
   materialError.value = ''
+}
+
+interface SupplierMaterial {
+  id: string
+  supplierId: string
+  supplierName: string
+  materialId: string
+  materialName: string
+  materialPackaging: string
+  materialWeight: number
+  price: number
+  createdAt: string
+}
+
+// Supplier Material states
+const supplierMaterials = ref<SupplierMaterial[]>([])
+const loadingSupplierMaterials = ref(false)
+const showAddSupplierMaterialModal = ref(false)
+const showEditSupplierMaterialModal = ref(false)
+const showDeleteSupplierMaterialModal = ref(false)
+const editingSupplierMaterial = ref<SupplierMaterial | null>(null)
+const deletingSupplierMaterial = ref<SupplierMaterial | null>(null)
+const supplierMaterialError = ref('')
+const supplierMaterialForm = ref({
+  supplierId: '',
+  materialId: '',
+  price: 0
+})
+const resetSupplierMaterialForm = () => {
+  supplierMaterialForm.value = {
+    supplierId: '',
+    materialId: '',
+    price: 0
+  }
+  supplierMaterialError.value = ''
 }
 
 const stats = ref([
@@ -771,7 +833,7 @@ const fetchCities = () => {
     })
     
     // Auto-seed default cities if collection is empty
-    if (fetched.length === 0 && !localStorage.getItem('harvest_erp_cities_seeded')) {
+    if (fetched.length === 0) {
       const defaultCities = ['Salatiga', 'Semarang', 'Jakarta', 'Bandung', 'Surabaya']
       Promise.all(defaultCities.map(city => {
         const docRef = doc(collection(db, 'cities'))
@@ -861,6 +923,128 @@ const executeDeleteCity = async () => {
     mutating.value = false
   }
 }
+
+let unsubscribePackagings: (() => void) | null = null
+
+const fetchPackagings = () => {
+  loadingPackagings.value = true
+  if (unsubscribePackagings) unsubscribePackagings()
+  
+  unsubscribePackagings = onSnapshot(collection(db, 'kemasan'), (querySnapshot) => {
+    const fetched: PackagingOption[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      fetched.push({
+        id: doc.id,
+        name: data.name || '',
+        createdAt: dateString
+      })
+    })
+    
+    // Auto-seed default packaging if collection is empty
+    if (fetched.length === 0) {
+      const defaultPackagings = ['Sak', 'Karung', 'Jerigen', 'Box', 'Pcs']
+      Promise.all(defaultPackagings.map(pkg => {
+        const docRef = doc(collection(db, 'kemasan'))
+        return setDoc(docRef, {
+          name: pkg,
+          createdAt: serverTimestamp()
+        })
+      })).then(() => {
+        localStorage.setItem('harvest_erp_packagings_seeded', 'true')
+      }).catch(err => {
+        console.error('Error seeding packagings:', err)
+      })
+    }
+    
+    packagingOptions.value = fetched
+    loadingPackagings.value = false
+  }, (error) => {
+    console.error('Error fetching packagings:', error)
+    loadingPackagings.value = false
+  })
+}
+
+// Packaging CRUD handlers
+const saveAddPackaging = async () => {
+  mutating.value = true
+  packagingError.value = ''
+  try {
+    const docRef = doc(collection(db, 'kemasan'))
+    await setDoc(docRef, {
+      name: packagingForm.value.name,
+      createdAt: serverTimestamp()
+    })
+    showAddPackagingModal.value = false
+    resetPackagingForm()
+  } catch (error: any) {
+    console.error('Error adding packaging:', error)
+    packagingError.value = error.message || 'Gagal menambahkan kemasan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditPackaging = (pkg: PackagingOption) => {
+  editingPackaging.value = pkg
+  packagingForm.value = {
+    name: pkg.name
+  }
+  showEditPackagingModal.value = true
+}
+
+const saveEditPackaging = async () => {
+  if (!editingPackaging.value) return
+  mutating.value = true
+  packagingError.value = ''
+  try {
+    const docRef = doc(db, 'kemasan', editingPackaging.value.id)
+    await setDoc(docRef, {
+      name: packagingForm.value.name
+    }, { merge: true })
+    showEditPackagingModal.value = false
+    editingPackaging.value = null
+    resetPackagingForm()
+  } catch (error: any) {
+    console.error('Error editing packaging:', error)
+    packagingError.value = error.message || 'Gagal mengubah data kemasan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeletePackaging = (pkg: PackagingOption) => {
+  deletingPackaging.value = pkg
+  showDeletePackagingModal.value = true
+}
+
+const executeDeletePackaging = async () => {
+  if (!deletingPackaging.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'kemasan', deletingPackaging.value.id))
+    showDeletePackagingModal.value = false
+    deletingPackaging.value = null
+  } catch (error) {
+    console.error('Error deleting packaging:', error)
+    alert('Gagal menghapus kemasan.')
+  } finally {
+    mutating.value = false
+  }
+}
+
 
 let unsubscribeRawMaterials: (() => void) | null = null
 
@@ -974,6 +1158,144 @@ const executeDeleteMaterial = async () => {
   }
 }
 
+let unsubscribeSupplierMaterials: (() => void) | null = null
+
+const fetchSupplierMaterials = () => {
+  loadingSupplierMaterials.value = true
+  if (unsubscribeSupplierMaterials) unsubscribeSupplierMaterials()
+  
+  unsubscribeSupplierMaterials = onSnapshot(collection(db, 'supplier_bahan'), (querySnapshot) => {
+    const fetched: SupplierMaterial[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      fetched.push({
+        id: doc.id,
+        supplierId: data.supplierId || '',
+        supplierName: data.supplierName || '',
+        materialId: data.materialId || '',
+        materialName: data.materialName || '',
+        materialPackaging: data.materialPackaging || '',
+        materialWeight: Number(data.materialWeight) || 0,
+        price: Number(data.price) || 0,
+        createdAt: dateString
+      })
+    })
+    supplierMaterials.value = fetched
+    loadingSupplierMaterials.value = false
+  }, (error) => {
+    console.error('Error fetching supplier materials:', error)
+    loadingSupplierMaterials.value = false
+  })
+}
+
+// Supplier-Material CRUD handlers
+const saveAddSupplierMaterial = async () => {
+  mutating.value = true
+  supplierMaterialError.value = ''
+  try {
+    const selectedSupplier = suppliers.value.find(s => s.id === supplierMaterialForm.value.supplierId)
+    const selectedMaterial = rawMaterials.value.find(m => m.id === supplierMaterialForm.value.materialId)
+    
+    if (!selectedSupplier || !selectedMaterial) {
+      throw new Error('Supplier atau Bahan Baku tidak valid.')
+    }
+    
+    const docRef = doc(collection(db, 'supplier_bahan'))
+    await setDoc(docRef, {
+      supplierId: selectedSupplier.id,
+      supplierName: selectedSupplier.name,
+      materialId: selectedMaterial.id,
+      materialName: selectedMaterial.name,
+      materialPackaging: selectedMaterial.packaging,
+      materialWeight: Number(selectedMaterial.weight) || 0,
+      price: Number(supplierMaterialForm.value.price) || 0,
+      createdAt: serverTimestamp()
+    })
+    showAddSupplierMaterialModal.value = false
+    resetSupplierMaterialForm()
+  } catch (error: any) {
+    console.error('Error adding supplier material mapping:', error)
+    supplierMaterialError.value = error.message || 'Gagal menambahkan data supplier-bahan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditSupplierMaterial = (sm: SupplierMaterial) => {
+  editingSupplierMaterial.value = sm
+  supplierMaterialForm.value = {
+    supplierId: sm.supplierId,
+    materialId: sm.materialId,
+    price: sm.price
+  }
+  showEditSupplierMaterialModal.value = true
+}
+
+const saveEditSupplierMaterial = async () => {
+  if (!editingSupplierMaterial.value) return
+  mutating.value = true
+  supplierMaterialError.value = ''
+  try {
+    const selectedSupplier = suppliers.value.find(s => s.id === supplierMaterialForm.value.supplierId)
+    const selectedMaterial = rawMaterials.value.find(m => m.id === supplierMaterialForm.value.materialId)
+    
+    if (!selectedSupplier || !selectedMaterial) {
+      throw new Error('Supplier atau Bahan Baku tidak valid.')
+    }
+    
+    const docRef = doc(db, 'supplier_bahan', editingSupplierMaterial.value.id)
+    await setDoc(docRef, {
+      supplierId: selectedSupplier.id,
+      supplierName: selectedSupplier.name,
+      materialId: selectedMaterial.id,
+      materialName: selectedMaterial.name,
+      materialPackaging: selectedMaterial.packaging,
+      materialWeight: Number(selectedMaterial.weight) || 0,
+      price: Number(supplierMaterialForm.value.price) || 0
+    }, { merge: true })
+    showEditSupplierMaterialModal.value = false
+    editingSupplierMaterial.value = null
+    resetSupplierMaterialForm()
+  } catch (error: any) {
+    console.error('Error editing supplier material mapping:', error)
+    supplierMaterialError.value = error.message || 'Gagal mengubah data supplier-bahan.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteSupplierMaterial = (sm: SupplierMaterial) => {
+  deletingSupplierMaterial.value = sm
+  showDeleteSupplierMaterialModal.value = true
+}
+
+const executeDeleteSupplierMaterial = async () => {
+  if (!deletingSupplierMaterial.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'supplier_bahan', deletingSupplierMaterial.value.id))
+    showDeleteSupplierMaterialModal.value = false
+    deletingSupplierMaterial.value = null
+  } catch (error) {
+    console.error('Error deleting supplier material mapping:', error)
+    alert('Gagal menghapus data supplier-bahan.')
+  } finally {
+    mutating.value = false
+  }
+}
+
 onMounted(() => {
   auth.onAuthStateChanged((user) => {
     if (user) {
@@ -986,6 +1308,8 @@ onMounted(() => {
       fetchSuppliers()
       fetchCities()
       fetchRawMaterials()
+      fetchPackagings()
+      fetchSupplierMaterials()
     } else {
       router.push('/')
     }
@@ -1013,6 +1337,12 @@ onUnmounted(() => {
   }
   if (unsubscribeRawMaterials) {
     unsubscribeRawMaterials()
+  }
+  if (unsubscribePackagings) {
+    unsubscribePackagings()
+  }
+  if (unsubscribeSupplierMaterials) {
+    unsubscribeSupplierMaterials()
   }
 })
 </script>
@@ -1229,6 +1559,13 @@ onUnmounted(() => {
               >
                 Daftar Kota
               </button>
+              <button
+                @click="currentTab = 'pengaturan_daftar_kemas'; openMenus.pengaturan = false"
+                class="w-full text-left px-4 py-2 text-[15px] hover:bg-slate-800 transition-colors"
+                :class="currentTab === 'pengaturan_daftar_kemas' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
+              >
+                Daftar Kemas
+              </button>
             </div>
           </div>
         </div>
@@ -1444,6 +1781,13 @@ onUnmounted(() => {
                 :class="currentTab === 'pengaturan_daftar_kota' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
               >
                 Daftar Kota
+              </button>
+              <button
+                @click="currentTab = 'pengaturan_daftar_kemas'; showMobileSidebar = false"
+                class="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer text-left"
+                :class="currentTab === 'pengaturan_daftar_kemas' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+              >
+                Daftar Kemas
               </button>
             </div>
           </div>
@@ -1765,6 +2109,82 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- TAB: DAFTAR KEMASAN (Pengaturan Kemasan) -->
+        <div v-else-if="currentTab === 'pengaturan_daftar_kemas'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Kemasan</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola daftar tipe kemasan untuk bahan baku.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddPackagingModal = true; resetPackagingForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Kemasan
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingPackagings" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat daftar kemasan...</p>
+            </div>
+          </div>
+
+          <!-- Packaging Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama Kemasan</th>
+                    <th class="py-4 px-6">Tanggal Ditambahkan</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="pkg in packagingOptions" 
+                    :key="pkg.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">{{ pkg.name }}</td>
+                    <td class="py-4 px-6 text-slate-400">{{ pkg.createdAt }}</td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditPackaging(pkg)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Kemasan"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeletePackaging(pkg)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Kemasan"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- TAB: SUPPLIER (Tabel Supplier) -->
         <div v-else-if="currentTab === 'suppliyer'" class="space-y-6">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1980,7 +2400,7 @@ onUnmounted(() => {
                   >
                     <td class="py-4 px-6 font-medium text-white">{{ mat.name }}</td>
                     <td class="py-4 px-6 text-slate-400">{{ mat.packaging }}</td>
-                    <td class="py-4 px-6 text-slate-400 font-semibold">{{ mat.weight }} Kg</td>
+                    <td class="py-4 px-6 text-slate-400 font-semibold">{{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}</td>
                     <td class="py-4 px-6 text-right">
                       <div class="flex items-center justify-end gap-2">
                         <button 
@@ -1996,6 +2416,86 @@ onUnmounted(() => {
                           @click="openDeleteMaterial(mat)"
                           class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
                           title="Hapus Bahan Baku"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: SUPPLIER BAHAN (Pengaturan Supplier Bahan) -->
+        <div v-else-if="currentTab === 'pengaturan_suppliyer_bahan'" class="space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Hubungan Suppliyer-Bahan</h2>
+              <p class="text-sm text-slate-400 mt-1">Kelola data pemetaan bahan baku yang dipasok oleh supplier beserta harganya.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddSupplierMaterialModal = true; resetSupplierMaterialForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Hubungan
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingSupplierMaterials" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat data hubungan supplier-bahan...</p>
+            </div>
+          </div>
+
+          <!-- Supplier Materials Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Suppliyer - Bahan Baku</th>
+                    <th class="py-4 px-6">Harga</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="sm in supplierMaterials" 
+                    :key="sm.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">
+                      {{ sm.supplierName }} - {{ sm.materialName }} {{ sm.materialPackaging }} {{ sm.materialWeight }} {{ sm.materialPackaging && sm.materialPackaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+                    </td>
+                    <td class="py-4 px-6 text-slate-300 font-semibold">
+                      Rp {{ Number(sm.price).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditSupplierMaterial(sm)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Hubungan"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteSupplierMaterial(sm)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Hubungan"
                         >
                           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2494,6 +2994,101 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Add Supplier-Material Modal -->
+    <div v-if="showAddSupplierMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddSupplierMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Hubungan Supplier-Bahan</h3>
+        <form @submit.prevent="saveAddSupplierMaterial" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Supplier</label>
+            <select v-model="supplierMaterialForm.supplierId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Supplier</option>
+              <option v-for="sup in suppliers" :key="sup.id" :value="sup.id">{{ sup.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Bahan Baku</label>
+            <select v-model="supplierMaterialForm.materialId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Bahan Baku</option>
+              <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
+                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Harga (Rp)</label>
+            <input v-model.number="supplierMaterialForm.price" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Contoh: 230000" />
+          </div>
+          <div v-if="supplierMaterialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ supplierMaterialError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddSupplierMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Hubungan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Supplier-Material Modal -->
+    <div v-if="showEditSupplierMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditSupplierMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Hubungan Supplier-Bahan</h3>
+        <form @submit.prevent="saveEditSupplierMaterial" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Supplier</label>
+            <select v-model="supplierMaterialForm.supplierId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Supplier</option>
+              <option v-for="sup in suppliers" :key="sup.id" :value="sup.id">{{ sup.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Bahan Baku</label>
+            <select v-model="supplierMaterialForm.materialId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Bahan Baku</option>
+              <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
+                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Harga (Rp)</label>
+            <input v-model.number="supplierMaterialForm.price" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div v-if="supplierMaterialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ supplierMaterialError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditSupplierMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Supplier-Material Confirmation Modal -->
+    <div v-if="showDeleteSupplierMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteSupplierMaterialModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Hubungan Supplier-Bahan</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus hubungan antara <span class="text-white font-semibold">{{ deletingSupplierMaterial?.supplierName }}</span> dan <span class="text-white font-semibold">{{ deletingSupplierMaterial?.materialName }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteSupplierMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteSupplierMaterial" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Hubungan' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Add City Modal -->
     <div v-if="showAddCityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddCityModal = false"></div>
@@ -2557,6 +3152,69 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Add Packaging Modal -->
+    <div v-if="showAddPackagingModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddPackagingModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Kemasan Baru</h3>
+        <form @submit.prevent="saveAddPackaging" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Kemasan</label>
+            <input v-model="packagingForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Kemasan (cth: Sak, Karung, Jerigen)" />
+          </div>
+          <div v-if="packagingError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ packagingError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddPackagingModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Kemasan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Packaging Modal -->
+    <div v-if="showEditPackagingModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditPackagingModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Nama Kemasan</h3>
+        <form @submit.prevent="saveEditPackaging" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Kemasan</label>
+            <input v-model="packagingForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div v-if="packagingError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ packagingError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditPackagingModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Packaging Modal -->
+    <div v-if="showDeletePackagingModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeletePackagingModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Kemasan</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus kemasan <span class="text-white font-semibold">{{ deletingPackaging?.name }}</span>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeletePackagingModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeletePackaging" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Kemasan' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Add Raw Material Modal -->
     <div v-if="showAddMaterialModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddMaterialModal = false"></div>
@@ -2569,11 +3227,16 @@ onUnmounted(() => {
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kemasan</label>
-            <input v-model="materialForm.packaging" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Kemasan (cth: Sak, Karung, Jerigen)" />
+            <select v-model="materialForm.packaging" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Kemasan</option>
+              <option v-for="pkg in packagingOptions" :key="pkg.id" :value="pkg.name">{{ pkg.name }}</option>
+            </select>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Berat (Kg)</label>
-            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Berat dalam Kg" />
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : 'Berat (Kg)' }}
+            </label>
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : 'Berat dalam Kg'" />
           </div>
           <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
             {{ materialError }}
@@ -2600,11 +3263,16 @@ onUnmounted(() => {
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Kemasan</label>
-            <input v-model="materialForm.packaging" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            <select v-model="materialForm.packaging" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
+              <option value="" disabled>Pilih Kemasan</option>
+              <option v-for="pkg in packagingOptions" :key="pkg.id" :value="pkg.name">{{ pkg.name }}</option>
+            </select>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Berat (Kg)</label>
-            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : 'Berat (Kg)' }}
+            </label>
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : 'Berat dalam Kg'" />
           </div>
           <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
             {{ materialError }}
