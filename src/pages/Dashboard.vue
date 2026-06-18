@@ -717,7 +717,7 @@ onUnmounted(() => {
           </div>
           <button 
             @click="handleLogout"
-            class="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/20 hover:bg-red-950/40 text-xs font-medium text-red-400 border border-red-900/30 hover:border-red-900/50 rounded-lg transition-all duration-300 cursor-pointer"
+            class="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/20 hover:bg-red-950/40 text-xs font-medium text-red-400 border border-red-900/30 hover:border-red-900/50 transition-all duration-300 cursor-pointer"
           >
             Keluar
           </button>
@@ -753,238 +753,98 @@ onUnmounted(() => {
       </button>
     </header>
 
-    <!-- Desktop Sidebar + Main Content Layout -->
-    <div class="flex-1 flex overflow-hidden">
-      <!-- Desktop Sidebar -->
-      <aside class="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 select-none">
-        <!-- Navigation Links -->
-        <div class="flex-1 overflow-y-auto py-6 px-4 space-y-7">
-          <!-- Main Module -->
-          <div class="space-y-1">
-            <p class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Modul Utama</p>
-            <button 
-              @click="currentTab = 'dashboard'"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab === 'dashboard' ? 'bg-purple-600/20 text-purple-400 border-purple-500/30 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              Dashboard
-            </button>
-            <button 
-              @click="currentTab = 'penjualan'"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab === 'penjualan' ? 'bg-purple-600/20 text-purple-400 border-purple-500/30 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              Penjualan
-            </button>
-            <button 
-              @click="currentTab = 'pembelian'"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab === 'pembelian' ? 'bg-purple-600/20 text-purple-400 border-purple-500/30 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              Pembelian
-            </button>
-          </div>
+    
+    <!-- Desktop Horizontal Menu (Wide Screens) -->
+    <nav class="hidden md:flex bg-slate-900 border-b border-slate-800 shrink-0 relative z-40 px-6 h-12 items-center gap-6 shadow-sm select-none">
+      <button 
+        @click="currentTab = 'dashboard'"
+        class="text-sm font-medium transition-colors cursor-pointer border-b-2 hover:text-purple-400 hover:border-purple-500"
+        :class="currentTab === 'dashboard' ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'"
+      >
+        Dashboard
+      </button>
+      <button 
+        @click="currentTab = 'penjualan'"
+        class="text-sm font-medium transition-colors cursor-pointer border-b-2 hover:text-purple-400 hover:border-purple-500"
+        :class="currentTab === 'penjualan' ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'"
+      >
+        Penjualan
+      </button>
+      <button 
+        @click="currentTab = 'pembelian'"
+        class="text-sm font-medium transition-colors cursor-pointer border-b-2 hover:text-purple-400 hover:border-purple-500"
+        :class="currentTab === 'pembelian' ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'"
+      >
+        Pembelian
+      </button>
 
-          <!-- Modul Produksi (Dropdown) -->
-          <div class="space-y-1">
-            <button 
-              @click="toggleMenu('produksi')"
-              class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab.startsWith('produksi_') ? 'bg-purple-600/20 text-purple-400 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <span class="flex items-center gap-3">
-                <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                Produksi
-              </span>
-              <svg class="h-3.5 w-3.5 transition-transform duration-200" :class="{ 'rotate-180': openMenus.produksi }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div v-show="openMenus.produksi" class="pl-9 pr-2 py-1 space-y-1">
-              <button 
-                @click="currentTab = 'produksi_kelola_cetak'; openMenus.produksi = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'produksi_kelola_cetak' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Kelola Cetak
-              </button>
-              <button 
-                @click="currentTab = 'produksi_kelola_kemas'; openMenus.produksi = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'produksi_kelola_kemas' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Kelola Kemas
-              </button>
-              <button 
-                @click="currentTab = 'produksi_barang_jadi'; openMenus.produksi = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'produksi_barang_jadi' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Barang Jadi
-              </button>
-              <button 
-                @click="currentTab = 'produksi_hpp'; openMenus.produksi = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'produksi_hpp' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Harga Pokok (HPP)
-              </button>
-            </div>
-          </div>
-
-          <!-- Modul Gudang (Dropdown) -->
-          <div class="space-y-1">
-            <button 
-              @click="toggleMenu('gudang')"
-              class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab.startsWith('gudang_') ? 'bg-purple-600/20 text-purple-400 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <span class="flex items-center gap-3">
-                <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                Gudang
-              </span>
-              <svg class="h-3.5 w-3.5 transition-transform duration-200" :class="{ 'rotate-180': openMenus.gudang }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div v-show="openMenus.gudang" class="pl-9 pr-2 py-1 space-y-1">
-              <button 
-                @click="currentTab = 'gudang_barang_jadi'; openMenus.gudang = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'gudang_barang_jadi' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Barang Jadi
-              </button>
-              <button 
-                @click="currentTab = 'gudang_bahan_baku'; openMenus.gudang = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'gudang_bahan_baku' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Bahan Baku
-              </button>
-            </div>
-          </div>
-
-          <!-- Modul Gaji/Salary (Dropdown) -->
-          <div class="space-y-1">
-            <button 
-              @click="toggleMenu('salary')"
-              class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab.startsWith('salary_') ? 'bg-purple-600/20 text-purple-400 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <span class="flex items-center gap-3">
-                <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16V5" />
-                </svg>
-                Salary / Gaji
-              </span>
-              <svg class="h-3.5 w-3.5 transition-transform duration-200" :class="{ 'rotate-180': openMenus.salary }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div v-show="openMenus.salary" class="pl-9 pr-2 py-1 space-y-1">
-              <button 
-                @click="currentTab = 'salary_cetak'; openMenus.salary = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'salary_cetak' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Gaji Cetak
-              </button>
-              <button 
-                @click="currentTab = 'salary_kemas'; openMenus.salary = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'salary_kemas' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Gaji Kemas
-              </button>
-            </div>
-          </div>
-
-          <!-- Modul Pengaturan (Dropdown) -->
-          <div class="space-y-1">
-            <button 
-              @click="toggleMenu('pengaturan')"
-              class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-xl border border-transparent transition-all cursor-pointer"
-              :class="currentTab.startsWith('pengaturan_') || currentTab === 'users' || currentTab === 'customer' || currentTab === 'suppliyer' || currentTab === 'harga_pokok_produksi' ? 'bg-purple-600/20 text-purple-400 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
-            >
-              <span class="flex items-center gap-3">
-                <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Pengaturan
-              </span>
-              <svg class="h-3.5 w-3.5 transition-transform duration-200" :class="{ 'rotate-180': openMenus.pengaturan }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div v-show="openMenus.pengaturan" class="pl-9 pr-2 py-1 space-y-1">
-              <button 
-                @click="currentTab = 'users'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'users' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Daftar Users
-              </button>
-              <button 
-                @click="currentTab = 'customer'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'customer' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Daftar Customer
-              </button>
-              <button 
-                @click="currentTab = 'suppliyer'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'suppliyer' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Daftar Supplier
-              </button>
-              <button 
-                @click="currentTab = 'pengaturan_suppliyer_bahan'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'pengaturan_suppliyer_bahan' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Supplier - Bahan
-              </button>
-              <button 
-                @click="currentTab = 'pengaturan_bahan_baku'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'pengaturan_bahan_baku' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Bahan Baku
-              </button>
-              <button 
-                @click="currentTab = 'pengaturan_daftar_kota'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'pengaturan_daftar_kota' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Daftar Kota
-              </button>
-              <button 
-                @click="currentTab = 'pengaturan_daftar_kemas'; openMenus.pengaturan = false"
-                class="w-full text-left py-1.5 text-xs transition-colors cursor-pointer"
-                :class="currentTab === 'pengaturan_daftar_kemas' ? 'text-purple-400 font-semibold' : 'text-slate-300'"
-              >
-                Tipe Kemasan
-              </button>
-            </div>
-          </div>
+      <!-- Produksi Dropdown -->
+      <div class="relative group h-full flex items-center">
+        <button class="flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer border-b-2 group-hover:text-purple-400 group-hover:border-purple-500" :class="currentTab.startsWith('produksi_') ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'">
+          Produksi
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div class="absolute top-full left-0 hidden group-hover:block w-48 bg-slate-800 border border-slate-700 shadow-xl py-2 z-50">
+          <button @click="currentTab = 'produksi_kelola_cetak'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Kelola Cetak</button>
+          <button @click="currentTab = 'produksi_kelola_kemas'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Kelola Kemas</button>
+          <button @click="currentTab = 'produksi_barang_jadi'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Barang Jadi</button>
+          <button @click="currentTab = 'produksi_hpp'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Harga Pokok (HPP)</button>
         </div>
-      </aside>
+      </div>
+
+      <!-- Gudang Dropdown -->
+      <div class="relative group h-full flex items-center">
+        <button class="flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer border-b-2 group-hover:text-purple-400 group-hover:border-purple-500" :class="currentTab.startsWith('gudang_') ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'">
+          Gudang
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div class="absolute top-full left-0 hidden group-hover:block w-48 bg-slate-800 border border-slate-700 shadow-xl py-2 z-50">
+          <button @click="currentTab = 'gudang_barang_jadi'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Barang Jadi</button>
+          <button @click="currentTab = 'gudang_bahan_baku'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Bahan Baku</button>
+        </div>
+      </div>
+
+      <!-- Salary Dropdown -->
+      <div class="relative group h-full flex items-center">
+        <button class="flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer border-b-2 group-hover:text-purple-400 group-hover:border-purple-500" :class="currentTab.startsWith('salary_') ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'">
+          Salary
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div class="absolute top-full left-0 hidden group-hover:block w-48 bg-slate-800 border border-slate-700 shadow-xl py-2 z-50">
+          <button @click="currentTab = 'salary_cetak'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Gaji Cetak</button>
+          <button @click="currentTab = 'salary_kemas'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Gaji Kemas</button>
+        </div>
+      </div>
+
+      <!-- Pengaturan Dropdown -->
+      <div class="relative group h-full flex items-center">
+        <button class="flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer border-b-2 group-hover:text-purple-400 group-hover:border-purple-500" :class="currentTab.startsWith('pengaturan_') || ['users','customer','suppliyer'].includes(currentTab) ? 'text-slate-400 border-transparent py-3' : 'text-slate-400 border-transparent py-3'">
+          Pengaturan
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div class="absolute top-full left-0 hidden group-hover:block w-56 bg-slate-800 border border-slate-700 shadow-xl py-2 z-50">
+          <button @click="currentTab = 'users'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Daftar Users</button>
+          <button @click="currentTab = 'customer'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Daftar Customer</button>
+          <button @click="currentTab = 'suppliyer'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Daftar Supplier</button>
+          <button @click="currentTab = 'pengaturan_suppliyer_bahan'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Supplier - Bahan</button>
+          <button @click="currentTab = 'pengaturan_bahan_baku'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Bahan Baku</button>
+          <button @click="currentTab = 'pengaturan_daftar_kota'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Daftar Kota</button>
+          <button @click="currentTab = 'pengaturan_daftar_kemas'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Tipe Kemasan</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mobile Sidebar & Main Content Layout -->
+    <div class="flex-1 flex overflow-hidden">
+      
 
       <!-- Mobile Sidebar Overlay & Drawer -->
       <div v-show="showMobileSidebar" class="md:hidden fixed inset-0 z-50 flex">
@@ -1007,155 +867,210 @@ onUnmounted(() => {
           
           <div class="flex-1 overflow-y-auto space-y-6 -mx-2 px-2">
             <!-- Mobile Navigation List -->
+            <!-- Dashboard -->
             <button 
               @click="currentTab = 'dashboard'; showMobileSidebar = false"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-xl border transition-all cursor-pointer"
-              :class="currentTab === 'dashboard' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+              class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer rounded-lg"
+              :class="currentTab === 'dashboard' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
             >
+              <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
               Dashboard
             </button>
+
+            <!-- Penjualan -->
             <button 
               @click="currentTab = 'penjualan'; showMobileSidebar = false"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-xl border transition-all cursor-pointer"
-              :class="currentTab === 'penjualan' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+              class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer rounded-lg"
+              :class="currentTab === 'penjualan' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
             >
+              <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
               Penjualan
             </button>
+
+            <!-- Pembelian -->
             <button 
               @click="currentTab = 'pembelian'; showMobileSidebar = false"
-              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-xl border transition-all cursor-pointer"
-              :class="currentTab === 'pembelian' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+              class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer rounded-lg"
+              :class="currentTab === 'pembelian' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
             >
+              <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
               Pembelian
             </button>
 
-            <!-- Produksi Mobile -->
+            <!-- Produksi Accordion -->
             <div>
-              <p class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">PRODUKSI</p>
-              <div class="space-y-1">
+              <button @click.stop="toggleMenu('produksi')" class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer text-slate-300 hover:text-purple-400" :class="openMenus.produksi || currentTab.startsWith('produksi_') ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  Produksi
+                </div>
+                <svg class="w-4 h-4 transition-transform duration-200 opacity-70" :class="openMenus.produksi ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div v-show="openMenus.produksi" class="mt-1 pl-11 pr-3 space-y-1">
                 <button 
                   @click="currentTab = 'produksi_kelola_cetak'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'produksi_kelola_cetak' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'produksi_kelola_cetak' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Cetak
                 </button>
                 <button 
                   @click="currentTab = 'produksi_kelola_kemas'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'produksi_kelola_kemas' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'produksi_kelola_kemas' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Kemas
                 </button>
                 <button 
                   @click="currentTab = 'produksi_barang_jadi'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'produksi_barang_jadi' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'produksi_barang_jadi' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Barang Jadi
                 </button>
                 <button 
                   @click="currentTab = 'produksi_hpp'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'produksi_hpp' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'produksi_hpp' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Harga Pokok (HPP)
                 </button>
               </div>
             </div>
 
-            <!-- Gudang Mobile -->
+            <!-- Gudang Accordion -->
             <div>
-              <p class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">GUDANG</p>
-              <div class="space-y-1">
+              <button @click.stop="toggleMenu('gudang')" class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer text-slate-300 hover:text-purple-400" :class="openMenus.gudang || currentTab.startsWith('gudang_') ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  Gudang
+                </div>
+                <svg class="w-4 h-4 transition-transform duration-200 opacity-70" :class="openMenus.gudang ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div v-show="openMenus.gudang" class="mt-1 pl-11 pr-3 space-y-1">
                 <button 
                   @click="currentTab = 'gudang_barang_jadi'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'gudang_barang_jadi' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'gudang_barang_jadi' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Barang Jadi
                 </button>
                 <button 
                   @click="currentTab = 'gudang_bahan_baku'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'gudang_bahan_baku' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'gudang_bahan_baku' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Bahan Baku
                 </button>
               </div>
             </div>
 
-            <!-- Salary Mobile -->
+            <!-- Salary Accordion -->
             <div>
-              <p class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">SALARY / GAJI</p>
-              <div class="space-y-1">
+              <button @click.stop="toggleMenu('salary')" class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer text-slate-300 hover:text-purple-400" :class="openMenus.salary || currentTab.startsWith('salary_') ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Salary / Gaji
+                </div>
+                <svg class="w-4 h-4 transition-transform duration-200 opacity-70" :class="openMenus.salary ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div v-show="openMenus.salary" class="mt-1 pl-11 pr-3 space-y-1">
                 <button 
                   @click="currentTab = 'salary_cetak'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'salary_cetak' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'salary_cetak' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Gaji Cetak
                 </button>
                 <button 
                   @click="currentTab = 'salary_kemas'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'salary_kemas' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'salary_kemas' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Gaji Kemas
                 </button>
               </div>
             </div>
 
-            <!-- Pengaturan Mobile -->
+            <!-- Pengaturan Accordion -->
             <div>
-              <p class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">PENGATURAN SYSTEM</p>
-              <div class="space-y-1">
+              <button @click.stop="toggleMenu('pengaturan')" class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer text-slate-300 hover:text-purple-400" :class="openMenus.pengaturan || currentTab.startsWith('pengaturan_') || currentTab == 'users' || currentTab == 'customer' || currentTab == 'suppliyer' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Pengaturan
+                </div>
+                <svg class="w-4 h-4 transition-transform duration-200 opacity-70" :class="openMenus.pengaturan ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div v-show="openMenus.pengaturan" class="mt-1 pl-11 pr-3 space-y-1">
                 <button 
                   @click="currentTab = 'users'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'users' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'users' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Users
                 </button>
                 <button 
                   @click="currentTab = 'customer'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'customer' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'customer' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Customer
                 </button>
                 <button 
                   @click="currentTab = 'suppliyer'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'suppliyer' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'suppliyer' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Supplier
                 </button>
                 <button 
                   @click="currentTab = 'pengaturan_suppliyer_bahan'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'pengaturan_suppliyer_bahan' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'pengaturan_suppliyer_bahan' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Supplier - Bahan
                 </button>
                 <button 
                   @click="currentTab = 'pengaturan_bahan_baku'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'pengaturan_bahan_baku' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'pengaturan_bahan_baku' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Bahan Baku
                 </button>
                 <button 
                   @click="currentTab = 'pengaturan_daftar_kota'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'pengaturan_daftar_kota' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'pengaturan_daftar_kota' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Kelola Kota
                 </button>
                 <button 
                   @click="currentTab = 'pengaturan_daftar_kemas'; showMobileSidebar = false"
-                  class="w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer"
-                  :class="currentTab === 'pengaturan_daftar_kemas' ? 'bg-purple-600/10 text-purple-400 border-l-2 border-purple-500 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'"
+                  class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
+                  :class="currentTab === 'pengaturan_daftar_kemas' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
                   Tipe Kemasan
                 </button>
