@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth, db, app } from '../firebase'
 import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
@@ -1374,6 +1374,15 @@ const recipeForm = ref({
   batchSize: 1,
   recipe: [{ materialId: '', quantity: 0 }] as RecipeItem[],
   overhead: [{ name: '', cost: 0 }] as OverheadItem[]
+})
+
+watch(() => recipeForm.value.productId, (newVal) => {
+  if (newVal && !editingRecipe.value) {
+    const selectedProd = products.value.find(p => p.id === newVal)
+    if (selectedProd && selectedProd.sku) {
+      recipeForm.value.variantSku = `${selectedProd.sku}.`
+    }
+  }
 })
 
 const resetRecipeForm = () => {
