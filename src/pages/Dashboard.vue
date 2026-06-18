@@ -1792,7 +1792,7 @@ onUnmounted(() => {
         <div class="w-48 hidden md:block"></div>
         
         <div class="flex flex-col items-center absolute left-1/2 -translate-x-1/2 select-none">
-          <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-7 w-auto object-contain brightness-110" />
+          <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-10 w-auto object-contain brightness-110" />
           <span class="text-[7px] font-medium text-slate-400 tracking-wider mt-1 uppercase">Enterprise Resource Planning</span>
         </div>
         
@@ -2026,7 +2026,7 @@ onUnmounted(() => {
           </svg>
         </button>
         <div class="flex flex-col">
-          <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-6 w-auto object-contain self-start brightness-110" />
+          <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-9 w-auto object-contain self-start brightness-110" />
           <span class="text-[7px] font-medium text-slate-400 tracking-wider mt-0.5 uppercase">Enterprise Resource Planning</span>
         </div>
       </div>
@@ -2044,7 +2044,7 @@ onUnmounted(() => {
       <aside class="relative w-64 bg-slate-900 flex flex-col h-full border-r border-slate-800 z-10 transition-all duration-300">
         <div class="p-6 border-b border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-6 w-auto object-contain brightness-110" />
+            <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-9 w-auto object-contain brightness-110" />
           </div>
           <!-- Close button -->
           <button @click="showMobileSidebar = false" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-all cursor-pointer">
