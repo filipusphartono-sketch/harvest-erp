@@ -72,7 +72,7 @@ const getTabTitle = (tab: string) => {
     case 'pengaturan_bahan_baku': return 'Pengaturan - Bahan Baku'
     case 'pengaturan_barang_jadi': return 'Pengaturan - Barang Jadi'
     case 'pengaturan_daftar_kota': return 'Pengaturan - Daftar Kota'
-    case 'pengaturan_daftar_kemas': return 'Pengaturan - Daftar Kemas'
+    case 'pengaturan_daftar_kemas': return 'Pengaturan - Satuan'
     default: return 'Harvest ERP'
   }
 }
@@ -837,7 +837,7 @@ onUnmounted(() => {
           <button @click="currentTab = 'pengaturan_suppliyer_bahan'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Supplier - Bahan</button>
           <button @click="currentTab = 'pengaturan_bahan_baku'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Bahan Baku</button>
           <button @click="currentTab = 'pengaturan_daftar_kota'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Daftar Kota</button>
-          <button @click="currentTab = 'pengaturan_daftar_kemas'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Tipe Kemasan</button>
+          <button @click="currentTab = 'pengaturan_daftar_kemas'" class="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer">Satuan</button>
         </div>
       </div>
     </nav>
@@ -1072,7 +1072,7 @@ onUnmounted(() => {
                   class="w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer"
                   :class="currentTab === 'pengaturan_daftar_kemas' ? 'text-slate-400 font-semibold hover:text-purple-400' : 'text-slate-400 hover:text-purple-400'"
                 >
-                  Tipe Kemasan
+                  Satuan
                 </button>
               </div>
             </div>
