@@ -1085,12 +1085,7 @@ onUnmounted(() => {
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Main content -->
       <main class="flex-1 overflow-y-auto p-8">
-        <!-- Page Title Header (For both Desktop and Mobile context) -->
-        <div class="mb-6 flex justify-between items-center">
-          <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight">
-            {{ getTabTitle(currentTab) }}
-          </h1>
-        </div>
+
 
         <!-- TAB 1: DASHBOARD OVERVIEW -->
         <OverviewTab
