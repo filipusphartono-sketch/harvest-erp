@@ -1326,6 +1326,9 @@ interface HppRecipe {
   printingLaborCost: number
   packagingLaborCost: number
   overheadCost: number
+  overheadListrik?: number
+  overheadAir?: number
+  overheadLain?: number
   recipe: RecipeItem[]
   batchSize: number
   createdAt: string
@@ -1365,6 +1368,9 @@ const recipeForm = ref({
   printingLaborCost: 0,
   packagingLaborCost: 0,
   overheadCost: 0,
+  overheadListrik: 0,
+  overheadAir: 0,
+  overheadLain: 0,
   batchSize: 1,
   recipe: [{ materialId: '', quantity: 0 }] as RecipeItem[]
 })
@@ -1376,6 +1382,9 @@ const resetRecipeForm = () => {
     printingLaborCost: 0,
     packagingLaborCost: 0,
     overheadCost: 0,
+    overheadListrik: 0,
+    overheadAir: 0,
+    overheadLain: 0,
     batchSize: 1,
     recipe: [{ materialId: '', quantity: 0 }]
   }
@@ -1500,12 +1509,18 @@ const saveAddRecipe = async () => {
   recipeError.value = ''
   try {
     const docRef = doc(collection(db, 'hpp_recipes'))
+    const totalOverhead = (Number(recipeForm.value.overheadListrik) || 0) + 
+                          (Number(recipeForm.value.overheadAir) || 0) + 
+                          (Number(recipeForm.value.overheadLain) || 0)
     await setDoc(docRef, {
       productId: recipeForm.value.productId,
       variantSku: recipeForm.value.variantSku,
       printingLaborCost: Number(recipeForm.value.printingLaborCost) || 0,
       packagingLaborCost: Number(recipeForm.value.packagingLaborCost) || 0,
-      overheadCost: Number(recipeForm.value.overheadCost) || 0,
+      overheadCost: totalOverhead,
+      overheadListrik: Number(recipeForm.value.overheadListrik) || 0,
+      overheadAir: Number(recipeForm.value.overheadAir) || 0,
+      overheadLain: Number(recipeForm.value.overheadLain) || 0,
       batchSize: Number(recipeForm.value.batchSize) || 1,
       recipe: recipeForm.value.recipe.map(r => ({
         materialId: r.materialId,
@@ -1533,12 +1548,20 @@ const openEditRecipe = (rec: HppRecipe) => {
         return { materialId: baseName, quantity: r.quantity };
       })
     : [{ materialId: '', quantity: 0 }]
+  
+  const listrik = rec.overheadListrik || 0
+  const air = rec.overheadAir || 0
+  const lain = rec.overheadLain !== undefined ? rec.overheadLain : (listrik === 0 && air === 0 ? rec.overheadCost || 0 : 0)
+
   recipeForm.value = {
     productId: rec.productId,
     variantSku: rec.variantSku,
     printingLaborCost: rec.printingLaborCost,
     packagingLaborCost: rec.packagingLaborCost,
     overheadCost: rec.overheadCost,
+    overheadListrik: listrik,
+    overheadAir: air,
+    overheadLain: lain,
     batchSize: rec.batchSize || 1,
     recipe: mappedRecipe
   }
@@ -1551,12 +1574,18 @@ const saveEditRecipe = async () => {
   recipeError.value = ''
   try {
     const docRef = doc(db, 'hpp_recipes', editingRecipe.value.id)
+    const totalOverhead = (Number(recipeForm.value.overheadListrik) || 0) + 
+                          (Number(recipeForm.value.overheadAir) || 0) + 
+                          (Number(recipeForm.value.overheadLain) || 0)
     await setDoc(docRef, {
       productId: recipeForm.value.productId,
       variantSku: recipeForm.value.variantSku,
       printingLaborCost: Number(recipeForm.value.printingLaborCost) || 0,
       packagingLaborCost: Number(recipeForm.value.packagingLaborCost) || 0,
-      overheadCost: Number(recipeForm.value.overheadCost) || 0,
+      overheadCost: totalOverhead,
+      overheadListrik: Number(recipeForm.value.overheadListrik) || 0,
+      overheadAir: Number(recipeForm.value.overheadAir) || 0,
+      overheadLain: Number(recipeForm.value.overheadLain) || 0,
       batchSize: Number(recipeForm.value.batchSize) || 1,
       recipe: recipeForm.value.recipe.map(r => ({
         materialId: r.materialId,
@@ -2931,28 +2960,15 @@ onUnmounted(() => {
 
         <!-- TAB: BARANG JADI (MASTER) -->
         <div v-else-if="currentTab === 'produksi_barang_jadi'" class="space-y-6">
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md">
-              <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-slate-400">Total Barang Jadi</p>
-                <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                </div>
-              </div>
-              <p class="text-3xl font-bold text-white mt-2">
-                {{ products.length }} Produk
-              </p>
-              <p class="text-xs text-slate-500 mt-2">Terdaftar sebagai master produk</p>
-            </div>
-          </div>
-
           <!-- Title and Actions -->
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Barang Jadi</h2>
+              <div class="flex items-center gap-3">
+                <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Barang Jadi</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  {{ products.length }} Produk
+                </span>
+              </div>
               <p class="text-sm text-slate-400 mt-1">Master produk barang jadi untuk kebutuhan produksi dan kalkulasi HPP.</p>
             </div>
             <div>
@@ -3031,28 +3047,15 @@ onUnmounted(() => {
 
         <!-- TAB: HARGA POKOK PRODUKSI (RECIPES) -->
         <div v-else-if="currentTab === 'produksi_hpp'" class="space-y-6">
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md">
-              <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-slate-400">Total Resep HPP</p>
-                <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-              </div>
-              <p class="text-3xl font-bold text-white mt-2">
-                {{ hppRecipes.length }} Resep
-              </p>
-              <p class="text-xs text-slate-500 mt-2">Resep HPP terdaftar</p>
-            </div>
-          </div>
-
           <!-- Title and Actions -->
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 class="text-2xl font-bold text-white tracking-tight">Harga Pokok Produksi (Resep)</h2>
+              <div class="flex items-center gap-3">
+                <h2 class="text-2xl font-bold text-white tracking-tight">Harga Pokok Produksi (Resep)</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  {{ hppRecipes.length }} Resep
+                </span>
+              </div>
               <p class="text-sm text-slate-400 mt-1">Kelola detail formula bahan baku dan biaya tenaga kerja / overhead untuk setiap varian resep.</p>
             </div>
             <div>
@@ -4033,7 +4036,7 @@ onUnmounted(() => {
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Varian SKU / Kode Resep</label>
             <input v-model="recipeForm.variantSku" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="SWR200.3" />
           </div>
-          <div class="grid grid-cols-4 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <div class="flex flex-col">
               <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Cetak (Rp)</label>
               <input v-model.number="recipeForm.printingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
@@ -4043,12 +4046,22 @@ onUnmounted(() => {
               <input v-model.number="recipeForm.packagingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
             </div>
             <div class="flex flex-col">
-              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead (Rp)</label>
-              <input v-model.number="recipeForm.overheadCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
-            </div>
-            <div class="flex flex-col">
               <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Hasil (Pcs)</label>
               <input v-model.number="recipeForm.batchSize" type="number" min="1" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Listrik (Rp)</label>
+              <input v-model.number="recipeForm.overheadListrik" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Air (Rp)</label>
+              <input v-model.number="recipeForm.overheadAir" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Lain (Rp)</label>
+              <input v-model.number="recipeForm.overheadLain" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
             </div>
           </div>
 
@@ -4132,7 +4145,7 @@ onUnmounted(() => {
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Varian SKU / Kode Resep</label>
             <input v-model="recipeForm.variantSku" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
           </div>
-          <div class="grid grid-cols-4 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <div class="flex flex-col">
               <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Cetak (Rp)</label>
               <input v-model.number="recipeForm.printingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
@@ -4142,12 +4155,22 @@ onUnmounted(() => {
               <input v-model.number="recipeForm.packagingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
             </div>
             <div class="flex flex-col">
-              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead (Rp)</label>
-              <input v-model.number="recipeForm.overheadCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
-            </div>
-            <div class="flex flex-col">
               <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Hasil (Pcs)</label>
               <input v-model.number="recipeForm.batchSize" type="number" min="1" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Listrik (Rp)</label>
+              <input v-model.number="recipeForm.overheadListrik" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Air (Rp)</label>
+              <input v-model.number="recipeForm.overheadAir" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead Lain (Rp)</label>
+              <input v-model.number="recipeForm.overheadLain" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
             </div>
           </div>
 
