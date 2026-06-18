@@ -1791,7 +1791,7 @@ onUnmounted(() => {
         <!-- Spacer for layout balance -->
         <div class="w-48 hidden md:block"></div>
         
-        <div class="flex flex-col items-center absolute left-1/2 -translate-x-1/2 select-none">
+        <div class="flex flex-col items-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none">
           <img src="/Harvest Logo.png" alt="Harvest Logo" class="h-10 w-auto object-contain brightness-110" />
           <span class="text-[7px] font-medium text-slate-400 tracking-wider mt-1 uppercase">Enterprise Resource Planning</span>
         </div>
