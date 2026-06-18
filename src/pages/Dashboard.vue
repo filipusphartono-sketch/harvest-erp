@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth, db, app } from '../firebase'
 import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
@@ -274,6 +274,17 @@ const showDeleteMaterialModal = ref(false)
 const editingMaterial = ref<RawMaterial | null>(null)
 const deletingMaterial = ref<RawMaterial | null>(null)
 const materialError = ref('')
+const searchMaterialQuery = ref('')
+
+const filteredAndSortedRawMaterials = computed(() => {
+  let result = rawMaterials.value;
+  if (searchMaterialQuery.value.trim()) {
+    const query = searchMaterialQuery.value.toLowerCase();
+    result = result.filter(mat => mat.name.toLowerCase().includes(query));
+  }
+  return result.slice().sort((a, b) => a.name.localeCompare(b.name));
+})
+
 const materialForm = ref({
   name: '',
   packaging: '',
@@ -1296,6 +1307,238 @@ const executeDeleteSupplierMaterial = async () => {
   }
 }
 
+interface RecipeItem {
+  materialId: string
+  quantity: number
+}
+
+interface FinishedGood {
+  id: string
+  name: string
+  sku: string
+  sellingPrice: number
+  printingLaborCost: number
+  packagingLaborCost: number
+  overheadCost: number
+  recipe: RecipeItem[]
+  batchSize: number // Hasil/Yield per Batch
+  createdAt: string
+}
+
+const finishedGoods = ref<FinishedGood[]>([])
+const loadingFinishedGoods = ref(false)
+const showAddFinishedGoodModal = ref(false)
+const showEditFinishedGoodModal = ref(false)
+const showDeleteFinishedGoodModal = ref(false)
+const editingFinishedGood = ref<FinishedGood | null>(null)
+const deletingFinishedGood = ref<FinishedGood | null>(null)
+const finishedGoodError = ref('')
+const finishedGoodForm = ref({
+  name: '',
+  sku: '',
+  sellingPrice: 0,
+  printingLaborCost: 0,
+  packagingLaborCost: 0,
+  overheadCost: 0,
+  batchSize: 1, // Default yield 1
+  recipe: [{ materialId: '', quantity: 0 }] as RecipeItem[]
+})
+
+const addFormRecipeItem = () => {
+  finishedGoodForm.value.recipe.push({ materialId: '', quantity: 0 })
+}
+
+const removeFormRecipeItem = (index: number) => {
+  if (finishedGoodForm.value.recipe.length > 1) {
+    finishedGoodForm.value.recipe.splice(index, 1)
+  }
+}
+
+const resetFinishedGoodForm = () => {
+  finishedGoodForm.value = {
+    name: '',
+    sku: '',
+    sellingPrice: 0,
+    printingLaborCost: 0,
+    packagingLaborCost: 0,
+    overheadCost: 0,
+    batchSize: 1,
+    recipe: [{ materialId: '', quantity: 0 }]
+  }
+  finishedGoodError.value = ''
+}
+
+let unsubscribeFinishedGoods: (() => void) | null = null
+
+const fetchFinishedGoods = () => {
+  loadingFinishedGoods.value = true
+  if (unsubscribeFinishedGoods) unsubscribeFinishedGoods()
+  
+  unsubscribeFinishedGoods = onSnapshot(collection(db, 'barang_jadi'), (querySnapshot) => {
+    const fetched: FinishedGood[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      let dateString = 'Baru saja'
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          dateString = data.createdAt.toDate().toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        } else {
+          dateString = data.createdAt
+        }
+      }
+      
+      const recipe = Array.isArray(data.recipe) 
+        ? data.recipe.map((r: any) => ({
+            materialId: r.materialId || '',
+            quantity: Number(r.quantity) || 0
+          }))
+        : []
+        
+      fetched.push({
+        id: doc.id,
+        name: data.name || '',
+        sku: data.sku || '',
+        sellingPrice: Number(data.sellingPrice) || 0,
+        printingLaborCost: Number(data.printingLaborCost) || Number(data.laborCost) || 0,
+        packagingLaborCost: Number(data.packagingLaborCost) || 0,
+        overheadCost: Number(data.overheadCost) || 0,
+        recipe,
+        batchSize: Number(data.batchSize) || 1,
+        createdAt: dateString
+      })
+    })
+    finishedGoods.value = fetched
+    loadingFinishedGoods.value = false
+  }, (error) => {
+    console.error('Error fetching finished goods:', error)
+    loadingFinishedGoods.value = false
+  })
+}
+
+const saveAddFinishedGood = async () => {
+  mutating.value = true
+  finishedGoodError.value = ''
+  try {
+    const docRef = doc(collection(db, 'barang_jadi'))
+    await setDoc(docRef, {
+      name: finishedGoodForm.value.name,
+      sku: finishedGoodForm.value.sku,
+      sellingPrice: Number(finishedGoodForm.value.sellingPrice) || 0,
+      printingLaborCost: Number(finishedGoodForm.value.printingLaborCost) || 0,
+      packagingLaborCost: Number(finishedGoodForm.value.packagingLaborCost) || 0,
+      overheadCost: Number(finishedGoodForm.value.overheadCost) || 0,
+      batchSize: Number(finishedGoodForm.value.batchSize) || 1,
+      recipe: finishedGoodForm.value.recipe.map(r => ({
+        materialId: r.materialId,
+        quantity: Number(r.quantity) || 0
+      })),
+      createdAt: serverTimestamp()
+    })
+    showAddFinishedGoodModal.value = false
+    resetFinishedGoodForm()
+  } catch (error: any) {
+    console.error('Error adding finished good:', error)
+    finishedGoodError.value = error.message || 'Gagal menambahkan barang jadi.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openEditFinishedGood = (fg: FinishedGood) => {
+  editingFinishedGood.value = fg
+  const mappedRecipe = fg.recipe && fg.recipe.length > 0
+    ? fg.recipe.map(r => ({ materialId: r.materialId, quantity: r.quantity }))
+    : [{ materialId: '', quantity: 0 }]
+  finishedGoodForm.value = {
+    name: fg.name,
+    sku: fg.sku,
+    sellingPrice: fg.sellingPrice,
+    printingLaborCost: fg.printingLaborCost,
+    packagingLaborCost: fg.packagingLaborCost,
+    overheadCost: fg.overheadCost,
+    batchSize: fg.batchSize || 1,
+    recipe: mappedRecipe
+  }
+  showEditFinishedGoodModal.value = true
+}
+
+const saveEditFinishedGood = async () => {
+  if (!editingFinishedGood.value) return
+  mutating.value = true
+  finishedGoodError.value = ''
+  try {
+    const docRef = doc(db, 'barang_jadi', editingFinishedGood.value.id)
+    await setDoc(docRef, {
+      name: finishedGoodForm.value.name,
+      sku: finishedGoodForm.value.sku,
+      sellingPrice: Number(finishedGoodForm.value.sellingPrice) || 0,
+      printingLaborCost: Number(finishedGoodForm.value.printingLaborCost) || 0,
+      packagingLaborCost: Number(finishedGoodForm.value.packagingLaborCost) || 0,
+      overheadCost: Number(finishedGoodForm.value.overheadCost) || 0,
+      batchSize: Number(finishedGoodForm.value.batchSize) || 1,
+      recipe: finishedGoodForm.value.recipe.map(r => ({
+        materialId: r.materialId,
+        quantity: Number(r.quantity) || 0
+      }))
+    }, { merge: true })
+    showEditFinishedGoodModal.value = false
+    editingFinishedGood.value = null
+    resetFinishedGoodForm()
+  } catch (error: any) {
+    console.error('Error editing finished good:', error)
+    finishedGoodError.value = error.message || 'Gagal mengubah barang jadi.'
+  } finally {
+    mutating.value = false
+  }
+}
+
+const openDeleteFinishedGood = (fg: FinishedGood) => {
+  deletingFinishedGood.value = fg
+  showDeleteFinishedGoodModal.value = true
+}
+
+const executeDeleteFinishedGood = async () => {
+  if (!deletingFinishedGood.value) return
+  mutating.value = true
+  try {
+    await deleteDoc(doc(db, 'barang_jadi', deletingFinishedGood.value.id))
+    showDeleteFinishedGoodModal.value = false
+    deletingFinishedGood.value = null
+  } catch (error) {
+    console.error('Error deleting finished good:', error)
+    alert('Gagal menghapus barang jadi.')
+  } finally {
+    mutating.value = false
+  }
+}
+
+const getMaterialPricePerUnit = (materialId: string) => {
+  const prices = supplierMaterials.value
+    .filter(sm => sm.materialId === materialId && sm.materialWeight > 0)
+    .map(sm => sm.price / sm.materialWeight)
+  
+  if (prices.length === 0) {
+    const fallbackPrices = supplierMaterials.value
+      .filter(sm => sm.materialId === materialId)
+      .map(sm => sm.price)
+    if (fallbackPrices.length > 0) {
+      return Math.min(...fallbackPrices)
+    }
+    return 0
+  }
+  return Math.min(...prices)
+}
+
+const calculateRecipeMaterialCost = (recipe: RecipeItem[]) => {
+  return recipe.reduce((total, r) => {
+    return total + (r.quantity * getMaterialPricePerUnit(r.materialId))
+  }, 0)
+}
+
 onMounted(() => {
   auth.onAuthStateChanged((user) => {
     if (user) {
@@ -1310,6 +1553,7 @@ onMounted(() => {
       fetchRawMaterials()
       fetchPackagings()
       fetchSupplierMaterials()
+      fetchFinishedGoods()
     } else {
       router.push('/')
     }
@@ -1343,6 +1587,9 @@ onUnmounted(() => {
   }
   if (unsubscribeSupplierMaterials) {
     unsubscribeSupplierMaterials()
+  }
+  if (unsubscribeFinishedGoods) {
+    unsubscribeFinishedGoods()
   }
 })
 </script>
@@ -2359,7 +2606,20 @@ onUnmounted(() => {
               <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Bahan Baku</h2>
               <p class="text-sm text-slate-400 mt-1">Kelola data bahan baku produksi, kemasan, dan berat.</p>
             </div>
-            <div>
+            <div class="flex items-center gap-3">
+              <div class="relative">
+                <input 
+                  v-model="searchMaterialQuery"
+                  type="text"
+                  placeholder="Cari Nama Bahan..."
+                  class="w-full sm:w-64 px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+                >
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
               <button
                 @click="showAddMaterialModal = true; resetMaterialForm()"
                 class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
@@ -2394,13 +2654,13 @@ onUnmounted(() => {
                 </thead>
                 <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
                   <tr 
-                    v-for="mat in rawMaterials" 
+                    v-for="mat in filteredAndSortedRawMaterials" 
                     :key="mat.id"
                     class="hover:bg-slate-800/20 transition-colors"
                   >
                     <td class="py-4 px-6 font-medium text-white">{{ mat.name }}</td>
                     <td class="py-4 px-6 text-slate-400">{{ mat.packaging }}</td>
-                    <td class="py-4 px-6 text-slate-400 font-semibold">{{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}</td>
+                    <td class="py-4 px-6 text-slate-400 font-semibold">{{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : (mat.packaging && mat.packaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}</td>
                     <td class="py-4 px-6 text-right">
                       <div class="flex items-center justify-end gap-2">
                         <button 
@@ -2476,7 +2736,7 @@ onUnmounted(() => {
                     class="hover:bg-slate-800/20 transition-colors"
                   >
                     <td class="py-4 px-6 font-medium text-white">
-                      {{ sm.supplierName }} - {{ sm.materialName }} {{ sm.materialPackaging }} {{ sm.materialWeight }} {{ sm.materialPackaging && sm.materialPackaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+                      {{ sm.supplierName }} - {{ sm.materialName }} {{ sm.materialPackaging }} {{ sm.materialWeight }} {{ sm.materialPackaging && sm.materialPackaging.toLowerCase() === 'ltr' ? 'Liter' : (sm.materialPackaging && sm.materialPackaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}
                     </td>
                     <td class="py-4 px-6 text-slate-300 font-semibold">
                       Rp {{ Number(sm.price).toLocaleString('id-ID') }}
@@ -2502,6 +2762,189 @@ onUnmounted(() => {
                           </svg>
                         </button>
                       </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: HARGA POKOK PRODUKSI -->
+        <div v-else-if="currentTab === 'harga_pokok_produksi'" class="space-y-6">
+          <!-- HPP Summary Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Total Produk -->
+            <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-slate-400">Total Produk Jadi</p>
+                <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </div>
+              </div>
+              <p class="text-3xl font-bold text-white mt-2">
+                {{ finishedGoods.length }} Produk
+              </p>
+              <p class="text-xs text-slate-500 mt-2">Terdaftar dalam sistem HPP</p>
+            </div>
+
+            <!-- Rata-rata HPP per Pcs -->
+            <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-slate-400">Rata-rata HPP per Pcs</p>
+                <div class="p-2 rounded-lg bg-green-500/10 text-green-400">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+              <p class="text-3xl font-bold text-white mt-2">
+                Rp {{ 
+                  finishedGoods.length > 0 
+                    ? Math.round(finishedGoods.reduce((sum, fg) => {
+                        const hppPerUnit = (calculateRecipeMaterialCost(fg.recipe) + fg.printingLaborCost + fg.packagingLaborCost + fg.overheadCost) / (fg.batchSize || 1);
+                        return sum + hppPerUnit;
+                      }, 0) / finishedGoods.length).toLocaleString('id-ID')
+                    : '0' 
+                }}
+              </p>
+              <p class="text-xs text-slate-500 mt-2">Rata-rata biaya per unit selesai</p>
+            </div>
+
+            <!-- Biaya Batch Tertinggi -->
+            <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-slate-400">Biaya Batch Tertinggi</p>
+                <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                </div>
+              </div>
+              <p class="text-lg font-bold text-white mt-2 truncate">
+                {{ 
+                  (() => {
+                    if (finishedGoods.length === 0) return '-';
+                    let maxFg = finishedGoods[0];
+                    let maxCost = -999;
+                    finishedGoods.forEach(fg => {
+                      const cost = calculateRecipeMaterialCost(fg.recipe) + fg.printingLaborCost + fg.packagingLaborCost + fg.overheadCost;
+                      if (cost > maxCost) {
+                        maxCost = cost;
+                        maxFg = fg;
+                      }
+                    });
+                    return `${maxFg.name} (Rp ${Math.round(maxCost).toLocaleString('id-ID')})`;
+                  })()
+                }}
+              </p>
+              <p class="text-xs text-slate-500 mt-2">Berdasarkan total biaya per siklus batch</p>
+            </div>
+          </div>
+
+          <!-- Title and Actions -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white tracking-tight">Kalkulasi Harga Pokok Produksi (HPP)</h2>
+              <p class="text-sm text-slate-400 mt-1">Daftar barang jadi beserta kalkulasi harga pokok produksi dinamis berbasis formula resep.</p>
+            </div>
+            <div>
+              <button
+                @click="showAddFinishedGoodModal = true; resetFinishedGoodForm()"
+                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Barang Jadi
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingFinishedGoods" class="flex items-center justify-center h-64 bg-slate-900/20 border border-slate-800 rounded-2xl">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-sm text-slate-400">Memuat data barang jadi...</p>
+            </div>
+          </div>
+
+          <!-- HPP Table Card -->
+          <div v-else class="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800/80 bg-slate-900/60 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                    <th class="py-4 px-6">Nama & SKU</th>
+                    <th class="py-4 px-6 text-right">Bahan Baku</th>
+                    <th class="py-4 px-6 text-right">Upah Cetak</th>
+                    <th class="py-4 px-6 text-right">Upah Kemas</th>
+                    <th class="py-4 px-6 text-right">Overhead</th>
+                    <th class="py-4 px-6 text-right font-bold">Total Cost</th>
+                    <th class="py-4 px-6 text-right">Hasil</th>
+                    <th class="py-4 px-6 text-right font-bold text-indigo-400">Total HPP</th>
+                    <th class="py-4 px-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  <tr 
+                    v-for="fg in finishedGoods" 
+                    :key="fg.id"
+                    class="hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td class="py-4 px-6 font-medium text-white">
+                      <div class="font-bold">{{ fg.name }}</div>
+                      <div class="text-xs text-slate-500 mt-0.5">SKU: {{ fg.sku }}</div>
+                    </td>
+                    <td class="py-4 px-6 text-right font-medium">
+                      Rp {{ Math.round(calculateRecipeMaterialCost(fg.recipe)).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      Rp {{ Number(fg.printingLaborCost).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      Rp {{ Number(fg.packagingLaborCost).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      Rp {{ Number(fg.overheadCost).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right font-bold text-slate-200">
+                      Rp {{ Math.round(calculateRecipeMaterialCost(fg.recipe) + fg.printingLaborCost + fg.packagingLaborCost + fg.overheadCost).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right text-purple-400 font-semibold">
+                      {{ fg.batchSize }} pcs
+                    </td>
+                    <td class="py-4 px-6 text-right font-bold text-indigo-400">
+                      Rp {{ Math.round((calculateRecipeMaterialCost(fg.recipe) + fg.printingLaborCost + fg.packagingLaborCost + fg.overheadCost) / (fg.batchSize || 1)).toLocaleString('id-ID') }}
+                    </td>
+                    <td class="py-4 px-6 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button 
+                          @click="openEditFinishedGood(fg)"
+                          class="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all cursor-pointer"
+                          title="Edit Barang Jadi & Formula"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          @click="openDeleteFinishedGood(fg)"
+                          class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                          title="Hapus Barang Jadi"
+                        >
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="finishedGoods.length === 0">
+                    <td colspan="10" class="py-12 text-center text-slate-500">
+                      Belum ada data barang jadi. Klik "Tambah Barang Jadi" untuk memulai.
                     </td>
                   </tr>
                 </tbody>
@@ -3012,7 +3455,7 @@ onUnmounted(() => {
             <select v-model="supplierMaterialForm.materialId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
               <option value="" disabled>Pilih Bahan Baku</option>
               <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
-                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : (mat.packaging && mat.packaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}
               </option>
             </select>
           </div>
@@ -3051,7 +3494,7 @@ onUnmounted(() => {
             <select v-model="supplierMaterialForm.materialId" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm">
               <option value="" disabled>Pilih Bahan Baku</option>
               <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
-                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : 'Kg' }}
+                {{ mat.name }} {{ mat.packaging }} {{ mat.weight }} {{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : (mat.packaging && mat.packaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}
               </option>
             </select>
           </div>
@@ -3234,9 +3677,9 @@ onUnmounted(() => {
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
-              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : 'Berat (Kg)' }}
+              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : (materialForm.packaging && materialForm.packaging.toLowerCase() === 'lbr' ? 'Jumlah (Lbr)' : 'Berat (Kg)') }}
             </label>
-            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : 'Berat dalam Kg'" />
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : (materialForm.packaging && materialForm.packaging.toLowerCase() === 'lbr' ? 'Jumlah dalam Lbr' : 'Berat dalam Kg')" />
           </div>
           <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
             {{ materialError }}
@@ -3270,9 +3713,9 @@ onUnmounted(() => {
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
-              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : 'Berat (Kg)' }}
+              {{ materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume (Liter)' : (materialForm.packaging && materialForm.packaging.toLowerCase() === 'lbr' ? 'Jumlah (Lbr)' : 'Berat (Kg)') }}
             </label>
-            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : 'Berat dalam Kg'" />
+            <input v-model.number="materialForm.weight" type="number" step="any" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" :placeholder="materialForm.packaging && materialForm.packaging.toLowerCase() === 'ltr' ? 'Volume dalam Liter' : (materialForm.packaging && materialForm.packaging.toLowerCase() === 'lbr' ? 'Jumlah dalam Lbr' : 'Berat dalam Kg')" />
           </div>
           <div v-if="materialError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
             {{ materialError }}
@@ -3299,6 +3742,215 @@ onUnmounted(() => {
           <button type="button" @click="showDeleteMaterialModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
           <button type="button" @click="executeDeleteMaterial" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
             {{ mutating ? 'Menghapus...' : 'Hapus Bahan Baku' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Finished Good Modal -->
+    <div v-if="showAddFinishedGoodModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showAddFinishedGoodModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-bold text-white mb-4">Tambah Barang Jadi Baru</h3>
+        <form @submit.prevent="saveAddFinishedGood" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Barang</label>
+            <input v-model="finishedGoodForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="Nama Barang Jadi (cth: Cairan Pembersih A)" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">SKU / Kode Barang</label>
+            <input v-model="finishedGoodForm.sku" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" placeholder="SKU-XXX" />
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Cetak (Rp)</label>
+              <input v-model.number="finishedGoodForm.printingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Kemas (Rp)</label>
+              <input v-model.number="finishedGoodForm.packagingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead (Rp)</label>
+              <input v-model.number="finishedGoodForm.overheadCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Hasil (Pcs)</label>
+              <input v-model.number="finishedGoodForm.batchSize" type="number" min="1" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider">Formula Resep (Bahan Baku)</label>
+              <button 
+                type="button" 
+                @click="addFormRecipeItem"
+                class="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer"
+              >
+                + Tambah Bahan
+              </button>
+            </div>
+            <div class="space-y-3 max-h-48 overflow-y-auto pr-1">
+              <div 
+                v-for="(item, index) in finishedGoodForm.recipe" 
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <select 
+                  v-model="item.materialId" 
+                  required
+                  class="flex-1 min-w-0 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                >
+                  <option value="" disabled>Pilih Bahan Baku</option>
+                  <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
+                    {{ mat.name }} ({{ mat.packaging }}) - Est. Rp {{ Math.round(getMaterialPricePerUnit(mat.id)).toLocaleString('id-ID') }}/{{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : (mat.packaging && mat.packaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}
+                  </option>
+                </select>
+                <input 
+                  v-model.number="item.quantity" 
+                  type="number" 
+                  step="any" 
+                  required 
+                  placeholder="Jumlah"
+                  class="w-24 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <button 
+                  type="button" 
+                  @click="removeFormRecipeItem(index)"
+                  :disabled="finishedGoodForm.recipe.length <= 1"
+                  class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg border border-red-500/20 transition-all cursor-pointer shrink-0"
+                  title="Hapus Bahan"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="finishedGoodError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ finishedGoodError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showAddFinishedGoodModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Barang Jadi' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Finished Good Modal -->
+    <div v-if="showEditFinishedGoodModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showEditFinishedGoodModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-bold text-white mb-4">Edit Barang Jadi & Formula</h3>
+        <form @submit.prevent="saveEditFinishedGood" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Nama Barang</label>
+            <input v-model="finishedGoodForm.name" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">SKU / Kode Barang</label>
+            <input v-model="finishedGoodForm.sku" type="text" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Cetak (Rp)</label>
+              <input v-model.number="finishedGoodForm.printingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Upah Kemas (Rp)</label>
+              <input v-model.number="finishedGoodForm.packagingLaborCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Overhead (Rp)</label>
+              <input v-model.number="finishedGoodForm.overheadCost" type="number" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+            <div class="flex flex-col">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider h-8 flex items-end pb-1 leading-tight">Hasil (Pcs)</label>
+              <input v-model.number="finishedGoodForm.batchSize" type="number" min="1" required class="w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider">Formula Resep (Bahan Baku)</label>
+              <button 
+                type="button" 
+                @click="addFormRecipeItem"
+                class="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer"
+              >
+                + Tambah Bahan
+              </button>
+            </div>
+            <div class="space-y-3 max-h-48 overflow-y-auto pr-1">
+              <div 
+                v-for="(item, index) in finishedGoodForm.recipe" 
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <select 
+                  v-model="item.materialId" 
+                  required
+                  class="flex-1 min-w-0 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                >
+                  <option value="" disabled>Pilih Bahan Baku</option>
+                  <option v-for="mat in rawMaterials" :key="mat.id" :value="mat.id">
+                    {{ mat.name }} ({{ mat.packaging }}) - Est. Rp {{ Math.round(getMaterialPricePerUnit(mat.id)).toLocaleString('id-ID') }}/{{ mat.packaging && mat.packaging.toLowerCase() === 'ltr' ? 'Liter' : (mat.packaging && mat.packaging.toLowerCase() === 'lbr' ? 'Lbr' : 'Kg') }}
+                  </option>
+                </select>
+                <input 
+                  v-model.number="item.quantity" 
+                  type="number" 
+                  step="any" 
+                  required 
+                  placeholder="Jumlah"
+                  class="w-24 px-3 py-2 border border-slate-700 rounded-lg bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all sm:text-sm"
+                />
+                <button 
+                  type="button" 
+                  @click="removeFormRecipeItem(index)"
+                  :disabled="finishedGoodForm.recipe.length <= 1"
+                  class="p-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg border border-red-500/20 transition-all cursor-pointer shrink-0"
+                  title="Hapus Bahan"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="finishedGoodError" class="text-red-400 text-sm bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+            {{ finishedGoodError }}
+          </div>
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditFinishedGoodModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+            <button type="submit" :disabled="mutating" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer disabled:opacity-50">
+              {{ mutating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Finished Good Modal -->
+    <div v-if="showDeleteFinishedGoodModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="showDeleteFinishedGoodModal = false"></div>
+      <div class="relative bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl z-10">
+        <h3 class="text-lg font-bold text-white mb-2">Hapus Barang Jadi</h3>
+        <p class="text-sm text-slate-400 mb-6">
+          Apakah Anda yakin ingin menghapus barang jadi <span class="text-white font-semibold">{{ deletingFinishedGood?.name }}</span> beserta formula resepnya? Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" @click="showDeleteFinishedGoodModal = false" class="px-4 py-2 border border-slate-700 hover:border-slate-600 rounded-lg text-sm font-medium text-slate-300 transition-all cursor-pointer">Batal</button>
+          <button type="button" @click="executeDeleteFinishedGood" :disabled="mutating" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all cursor-pointer disabled:opacity-50">
+            {{ mutating ? 'Menghapus...' : 'Hapus Barang Jadi' }}
           </button>
         </div>
       </div>
