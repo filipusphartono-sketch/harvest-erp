@@ -121,7 +121,7 @@ const executeDeleteSupplier = async () => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 justify-start mt-0">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold text-white tracking-tight">Daftar Supplier (Suppliyer)</h2>

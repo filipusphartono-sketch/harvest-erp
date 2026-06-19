@@ -1081,10 +1081,10 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- Main content -->
-      <main class="flex-1 overflow-y-auto p-8">
+      <!-- Main Content Area -->
+      <div class="flex-1 flex flex-col overflow-hidden justify-start">
+        <!-- Main content -->
+        <main class="flex-1 overflow-y-auto px-8 pt-2 pb-8 mt-0">
 
 
         <!-- TAB 1: DASHBOARD OVERVIEW -->
